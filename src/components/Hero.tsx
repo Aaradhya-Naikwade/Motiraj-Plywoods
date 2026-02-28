@@ -13,7 +13,7 @@ const Hero = () => {
   };
 
   const navItems = ['Gallery', 'Products', 'Decorative', 'Laminates', 'hardware'];
-
+                                                                                    
   return (
     <section className="relative w-full">
       {/* 1. Navigation Bar */}

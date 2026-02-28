@@ -29,7 +29,7 @@ const MatchesSection = () => {
             <div key={cat} className="relative">
               <button
                 onClick={() => setActiveTab(cat)}
-                className={`px-8 py-4 text-sm md:text-base font-medium transition-all border-r border-[#B88E2F] last:border-r-0
+                className={`px-8 py-4 text-sm md:text-base font-medium transition-all border-r border-[#B88E2F] 
                   ${activeTab === cat ? 'text-black' : 'text-gray-500'}
                 `}
               >
@@ -70,7 +70,7 @@ const MatchesSection = () => {
         {p.discount}
       </div>
     </div>
-
+                  
     {/* Content */}
     <div className="p-4">
       <div className="flex justify-between items-center mb-1">

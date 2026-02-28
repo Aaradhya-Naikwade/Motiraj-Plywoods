@@ -13,7 +13,7 @@ const WhyShopSection = () => {
     <section className="w-full bg-[#A38A6A] py-20 px-4 md:px-10">
 
           <h2 className="text-white text-center text-4xl md:text-5xl font-bold mb-16 tracking-tight">
-          Why Shop With Motiraj Plywoods
+          Why Shop With Ratlamiinterio Plywoods
         </h2>
         
       <div className="max-w-7xl mx-auto border-2 border-white/50 rounded-[40px] p-8 md:p-16">

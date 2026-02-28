@@ -5,25 +5,25 @@ const LoveSection = () => {
   const testimonials = [
     {
       name: "Hemant Tripathi",
-      text: "New Sagan Door Mica Wallpapers Plywood Hardware. Designs Available Motiraj Plywood",
+      text: "New Sagan Door Mica Wallpapers Plywood Hardware. Designs Available Ratlamiinterio Plywood",
       avatar: "/image/user.jpg",
       product: "/image/product.png",
     },
     {
       name: "Hemant Tripathi",
-      text: "New Sagan Door Mica Wallpapers Plywood Hardware. Designs Available Motiraj Plywood",
+      text: "New Sagan Door Mica Wallpapers Plywood Hardware. Designs Available Ratlamiinterio Plywood",
       avatar: "/image/user.jpg",
       product: "/image/product.png",
     },
     {
       name: "Hemant Tripathi",
-      text: "New Sagan Door Mica Wallpapers Plywood Hardware. Designs Available Motiraj Plywood",
+      text: "New Sagan Door Mica Wallpapers Plywood Hardware. Designs Available Ratlamiinterio Plywood",
       avatar: "/image/user.jpg",
       product: "/image/product.png",
     },
     {
       name: "Hemant Tripathi",
-      text: "New Sagan Door Mica Wallpapers Plywood Hardware. Designs Available Motiraj Plywood",
+      text: "New Sagan Door Mica Wallpapers Plywood Hardware. Designs Available Ratlamiinterio Plywood",
       avatar: "/image/user.jpg",
       product: "/image/product.png",
     },

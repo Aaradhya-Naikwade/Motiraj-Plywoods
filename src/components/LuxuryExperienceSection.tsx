@@ -45,7 +45,7 @@ const LuxuryExperienceSection = () => {
                     <div className="mt-4 w-16 h-[3px] bg-[#C56B2E]" />
 
                     <p className="mt-6 text-white/90 leading-relaxed max-w-lg">
-                        Motiraj Plywoods brings luxury in comfort to your homes and
+                        Ratlamiinterio Plywoods brings luxury in comfort to your homes and
                         offices with a complete range of premium plywood, designer
                         doors, and modular solutions, all crafted to deliver high-end
                         elegance at an affordable price.

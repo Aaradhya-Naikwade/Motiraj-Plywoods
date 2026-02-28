@@ -23,15 +23,16 @@ const NewArrivalSection = () => {
                             fill
                             className="object-cover"
                         />
-
+                        
                         <div className="absolute inset-0 flex flex-col justify-between items-center py-10">
                             <h3 className="text-white text-3xl tracking-wide text-center">
                                 BED COM SOFA
                             </h3>
 
                             {/* <button className="bg-white text-black px-8 py-3 text-sm font-medium shadow-md">
-                EXPLORE NOW
-              </button> */}
+                                EXPLORE NOW
+                            </button> */}
+
                             <div className="inline-block p-[2px] bg-gradient-to-r from-[#947A57] to-[#F5F2EE] rounded-tl-3xl">
                                 <button className="bg-white text-black px-8 py-3 text-sm font-medium shadow-md rounded-tl-3xl">
                                     EXPLORE NOW
@@ -40,7 +41,7 @@ const NewArrivalSection = () => {
                         </div>
                     </div>
 
-                    {/* RIGHT SIDE UNEVEN GRID */}
+                    {/* RIGHT SIDE GRID */}
                     <div className="grid grid-cols-2 gap-6 h-[520px]">
 
                         {/* Column 1 */}

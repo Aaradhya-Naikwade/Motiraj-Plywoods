@@ -79,11 +79,11 @@ const ProductSlider = () => {
         </Swiper>
       </div>
 
-      {/* --- Section 2: Why Shop With Motiraj Plywoods --- */}
+      {/* --- Section 2: Why Shop With Ratlamiinterio Plywoods --- */}
       <div className="w-full mt-20 bg-[#8b6d4d]/90 py-16 px-4">
         <div className="max-w-7xl mx-auto border border-white/30 rounded-2xl p-8 md:p-12">
           <h2 className="text-4xl md:text-5xl font-bold text-white text-center mb-16">
-            Why Shop With Motiraj Plywoods
+            Why Shop With Ratlamiinterio Plywoods
           </h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 text-center text-white">

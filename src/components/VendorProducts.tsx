@@ -52,21 +52,21 @@ const VendorProducts = () => {
                                 <h3 className="text-lg font-semibold text-gray-800">
                                     Plywood
                                 </h3>
-
+                    
                                 <button className="text-sm bg-[#947A57] hover:bg-[#7f6647] transition text-white px-4 py-1.5 rounded-full">
                                     View Profile
                                 </button>
                             </div>
 
                             {/* Price */}
-                            <div className="flex items-center gap-3 pt-1">
+                            {/* <div className="flex items-center gap-3 pt-1">
                                 <span className="text-xl font-bold text-gray-900">
                                     ₹2,500
                                 </span>
                                 <span className="text-sm text-gray-400 line-through">
                                     ₹3,500
                                 </span>
-                            </div>
+                            </div> */}
 
                             {/* Location */}
                             <p className="text-sm text-gray-500">

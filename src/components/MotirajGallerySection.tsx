@@ -10,7 +10,7 @@ const MotirajGallerySection = () => {
           Share your setup with
         </p>
         <h2 className="text-4xl md:text-5xl font-semibold text-gray-800 mt-2">
-          #Motiraj Plywoods
+          #Ratlamiinterio Plywoods
         </h2>
       </div>
 

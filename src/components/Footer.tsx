@@ -109,20 +109,21 @@ const Footer = () => {
 
       {/* Copyright */}
       <div className="text-center text-md py-4">
-        Copyright © 2026 Motiraj Plywoods All Right Reserved. Designed By Webdesire
+        Copyright © 2026 Ratlamiinterio Plywoods All Right Reserved. Designed By Webdesire
       </div>
 
       {/* Big Text */}
       <div className="border-t border-[#853A12]">
         <div className="text-center py-10">
           <h1 className="text-[70px] md:text-[120px] font-bold tracking-wide text-white/90">
-            MOTIRAJ PLYWOODS
+          RATLAMIINTERIO
           </h1>
         </div>
       </div>
                 
     </footer>
   );
+
 };
 
 export default Footer;
