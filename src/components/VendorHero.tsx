@@ -22,7 +22,7 @@ const VendorHero = () => {
         </h2>
       </div>
 
-      {/* Full Width Image */}
+      {/* Full Width Image   */}
       <div className="-mt-10 w-full">
         <Image
           src="/image/vendors-group.png"
@@ -33,7 +33,7 @@ const VendorHero = () => {
           className="w-full h-auto object-cover"
         />
       </div>
-
+                
     </section>
   );
 };

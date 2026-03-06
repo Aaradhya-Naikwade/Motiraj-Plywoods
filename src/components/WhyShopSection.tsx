@@ -16,8 +16,8 @@ const WhyShopSection = () => {
           Why Shop With Ratlamiinterio Plywoods
         </h2>
         
+        
       <div className="max-w-7xl mx-auto border-2 border-white/50 rounded-[40px] p-8 md:p-16">
-      
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-y-12">
           {features.map((f, index) => (

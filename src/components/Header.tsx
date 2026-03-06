@@ -105,7 +105,7 @@ const Header = () => {
           </Link>
 
           {/* Profile */}
-          <div className="flex flex-col items-center cursor-pointer group ml-2">
+          <Link href="/profile" className="flex flex-col items-center cursor-pointer group ml-2">
             <div className="relative w-6 h-6 md:w-7 md:h-7 overflow-hidden">
               <Image
                 src="/image/user.png"
@@ -117,7 +117,7 @@ const Header = () => {
             <span className="text-[10px] text-amber-800 group-hover:text-black mt-0.5">
               Profile
             </span>
-          </div>
+          </Link>
         </div>
       </div>
 
@@ -154,7 +154,11 @@ const Header = () => {
             Contact
           </Link>
 
-          <div className="flex items-center gap-3 pt-3 border-t border-gray-300">
+          <Link
+            href="/profile"
+            onClick={() => setIsOpen(false)}
+            className="flex items-center gap-3 pt-3 border-t border-gray-300"
+          >
             <div className="relative w-6 h-6 overflow-hidden">
               <Image
                 src="/image/user.png"
@@ -164,7 +168,7 @@ const Header = () => {
               />
             </div>
             <span>Profile</span>
-          </div>
+          </Link>
         </div>
       </div>
     </header>
