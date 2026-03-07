@@ -7,9 +7,23 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Search, Menu, X } from 'lucide-react';
 
-const Header = () => {
+type HeaderProps = {
+  isVendorLoggedIn: boolean;
+};
+
+const Header = ({ isVendorLoggedIn }: HeaderProps) => {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const shouldHideHeader =
+    pathname.startsWith("/admin") ||
+    pathname === "/vendor/auth" ||
+    pathname.startsWith("/vendor/auth/") ||
+    pathname === "/vendor/signup" ||
+    pathname.startsWith("/vendor/signup/");
+
+  if (shouldHideHeader) {
+    return null;
+  }
 
   const navItem =
     "px-4 py-1.5 rounded-full transition-all duration-200 text-amber-800";
@@ -74,7 +88,7 @@ const Header = () => {
           <Link
             href="/vendor"
             className={
-              pathname === "/vendor"
+              pathname === "/vendor" || pathname.startsWith("/vendor/")
                 ? activeNav
                 : `${navItem} hover:bg-black hover:text-white`
             }
@@ -104,20 +118,21 @@ const Header = () => {
             Contact
           </Link>
 
-          {/* Profile */}
-          <Link href="/profile" className="flex flex-col items-center cursor-pointer group ml-2">
-            <div className="relative w-6 h-6 md:w-7 md:h-7 overflow-hidden">
-              <Image
-                src="/image/user.png"
-                alt="User Profile"
-                fill
-                className="object-cover"
-              />
-            </div>
-            <span className="text-[10px] text-amber-800 group-hover:text-black mt-0.5">
-              Profile
-            </span>
-          </Link>
+          {isVendorLoggedIn ? (
+            <Link href="/vendor/dashboard" className="flex flex-col items-center cursor-pointer group ml-2">
+              <div className="relative w-6 h-6 md:w-7 md:h-7 overflow-hidden">
+                <Image
+                  src="/image/user.png"
+                  alt="Vendor Dashboard"
+                  fill
+                  className="object-cover"
+                />
+              </div>
+              <span className="text-[10px] text-amber-800 group-hover:text-black mt-0.5">
+                Profile
+              </span>
+            </Link>
+          ) : null}
         </div>
       </div>
 
@@ -154,21 +169,23 @@ const Header = () => {
             Contact
           </Link>
 
-          <Link
-            href="/profile"
-            onClick={() => setIsOpen(false)}
-            className="flex items-center gap-3 pt-3 border-t border-gray-300"
-          >
-            <div className="relative w-6 h-6 overflow-hidden">
-              <Image
-                src="/image/user.png"
-                alt="User Profile"
-                fill
-                className="object-cover"
-              />
-            </div>
-            <span>Profile</span>
-          </Link>
+          {isVendorLoggedIn ? (
+            <Link
+              href="/vendor/dashboard"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center gap-3 pt-3 border-t border-gray-300"
+            >
+              <div className="relative w-6 h-6 overflow-hidden">
+                <Image
+                  src="/image/user.png"
+                  alt="Vendor Dashboard"
+                  fill
+                  className="object-cover"
+                />
+              </div>
+              <span>Profile</span>
+            </Link>
+          ) : null}
         </div>
       </div>
     </header>

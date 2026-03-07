@@ -31,7 +31,7 @@ export default function ContactPage() {
               <Mail className="mt-0.5 h-5 w-5" />
               <div>
                 <p className="text-xs uppercase tracking-wide text-white/70">
-                  Email
+                  Email 
                 </p>
                 <p className="text-sm font-medium">support@ratlamiinterio.com</p>
               </div>

@@ -13,7 +13,7 @@ const MotirajGallerySection = () => {
           #Ratlamiinterio Plywoods
         </h2>
       </div>
-
+      
       {/* FULL WIDTH IMAGE */}
       <div
         className="w-full h-[700px] bg-no-repeat bg-cover bg-center"
