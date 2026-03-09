@@ -3,9 +3,9 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { MongoServerError } from "mongodb";
-import { mkdir, unlink, writeFile } from "fs/promises";
+import { unlink } from "fs/promises";
 import path from "path";
-import { randomUUID } from "crypto";
+import { createHash } from "crypto";
 import { VENDOR_AUTH_COOKIE, VENDOR_SESSION_TTL_SECONDS, createVendorSessionToken, hashPassword, isStrongPassword, isValidMobile, normalizeMobile, verifyPassword, verifyVendorSessionToken } from "@/lib/vendor-auth";
 import { createVendor, findVendorById, findVendorByMobile, updateVendorLastLogin, updateVendorProfile } from "@/lib/vendor-repo";
 import { createVendorProduct, deleteVendorProduct, findVendorProductById, updateVendorProduct } from "@/lib/vendor-product-repo";
@@ -97,9 +97,14 @@ async function storeProductImages(files: File[]): Promise<string[]> {
     return [];
   }
 
-  const uploadDir = path.join(process.cwd(), "public", "uploads", "vendor-products");
-  await mkdir(uploadDir, { recursive: true });
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+  if (!cloudName || !apiKey || !apiSecret) {
+    throw new Error("Cloudinary credentials are missing.");
+  }
 
+  const folder = "vendor-products";
   const allowedMime = new Set(["image/jpeg", "image/png", "image/webp"]);
   const urls: string[] = [];
 
@@ -108,20 +113,97 @@ async function storeProductImages(files: File[]): Promise<string[]> {
       throw new Error("Unsupported image format. Use JPG, PNG, or WEBP.");
     }
 
-    const extFromType =
-      file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-    const filename = `${Date.now()}-${randomUUID()}.${extFromType}`;
-    const filePath = path.join(uploadDir, filename);
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(filePath, buffer);
-    urls.push(`/uploads/vendor-products/${filename}`);
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const paramsToSign = `folder=${folder}&timestamp=${timestamp}`;
+    const signature = createHash("sha1").update(`${paramsToSign}${apiSecret}`).digest("hex");
+
+    const payload = new FormData();
+    payload.set("file", file);
+    payload.set("folder", folder);
+    payload.set("timestamp", timestamp);
+    payload.set("api_key", apiKey);
+    payload.set("signature", signature);
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+      method: "POST",
+      body: payload,
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error("Cloudinary upload failed.");
+    }
+
+    const data = (await response.json()) as { secure_url?: string };
+    if (!data.secure_url) {
+      throw new Error("Cloudinary upload returned no URL.");
+    }
+
+    urls.push(data.secure_url);
   }
 
   return urls;
 }
 
-async function removeLocalImages(imageUrls: string[]) {
+function getCloudinaryPublicIdFromUrl(imageUrl: string): string | null {
+  try {
+    const parsed = new URL(imageUrl);
+    if (!parsed.hostname.includes("res.cloudinary.com")) {
+      return null;
+    }
+
+    const marker = "/upload/";
+    const uploadIndex = parsed.pathname.indexOf(marker);
+    if (uploadIndex === -1) {
+      return null;
+    }
+
+    const afterUpload = parsed.pathname.slice(uploadIndex + marker.length);
+    const parts = afterUpload.split("/").filter(Boolean);
+    if (parts.length === 0) {
+      return null;
+    }
+
+    // Skip version segment like v1700000000 if present.
+    const versionStart = parts[0].startsWith("v") ? 1 : 0;
+    if (versionStart >= parts.length) {
+      return null;
+    }
+
+    const pathWithExt = parts.slice(versionStart).join("/");
+    const lastDot = pathWithExt.lastIndexOf(".");
+    return lastDot > 0 ? pathWithExt.slice(0, lastDot) : pathWithExt;
+  } catch {
+    return null;
+  }
+}
+
+async function removeUploadedImages(imageUrls: string[]) {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
   for (const imageUrl of imageUrls) {
+    const publicId = getCloudinaryPublicIdFromUrl(imageUrl);
+    if (publicId && cloudName && apiKey && apiSecret) {
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const paramsToSign = `public_id=${publicId}&timestamp=${timestamp}`;
+      const signature = createHash("sha1").update(`${paramsToSign}${apiSecret}`).digest("hex");
+
+      const payload = new FormData();
+      payload.set("public_id", publicId);
+      payload.set("timestamp", timestamp);
+      payload.set("api_key", apiKey);
+      payload.set("signature", signature);
+
+      await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`, {
+        method: "POST",
+        body: payload,
+        cache: "no-store",
+      }).catch(() => undefined);
+      continue;
+    }
+
     if (!imageUrl.startsWith("/uploads/vendor-products/")) {
       continue;
     }
@@ -294,23 +376,24 @@ export async function vendorCreateProductAction(formData: FormData) {
     redirect("/vendor/dashboard?tab=products&error=too_many_images");
   }
 
+  let imageUrls: string[] = [];
   try {
-    const imageUrls = await storeProductImages(imageFiles);
-
-    await createVendorProduct({
-      vendor_id: vendor._id.toString(),
-      title,
-      description,
-      city,
-      price,
-      discount_percent: discountPercent,
-      image_urls: imageUrls,
-    });
-
-    redirect("/vendor/dashboard?tab=products&status=product_created");
+    imageUrls = await storeProductImages(imageFiles);
   } catch {
     redirect("/vendor/dashboard?tab=products&error=image_upload_failed");
   }
+
+  await createVendorProduct({
+    vendor_id: vendor._id.toString(),
+    title,
+    description,
+    city,
+    price,
+    discount_percent: discountPercent,
+    image_urls: imageUrls,
+  });
+
+  redirect("/vendor/dashboard?tab=products&status=product_created");
 }
 
 export async function vendorUpdateProductAction(formData: FormData) {
@@ -361,12 +444,12 @@ export async function vendorUpdateProductAction(formData: FormData) {
   const nextImageUrls = [...keptImages, ...newImageUrls];
 
   if (nextImageUrls.length === 0) {
-    await removeLocalImages(newImageUrls);
+    await removeUploadedImages(newImageUrls);
     redirect("/vendor/dashboard?tab=products&error=images_required");
   }
 
   if (nextImageUrls.length > 8) {
-    await removeLocalImages(newImageUrls);
+    await removeUploadedImages(newImageUrls);
     redirect("/vendor/dashboard?tab=products&error=too_many_images");
   }
 
@@ -380,11 +463,11 @@ export async function vendorUpdateProductAction(formData: FormData) {
   });
 
   if (!updated) {
-    await removeLocalImages(newImageUrls);
+    await removeUploadedImages(newImageUrls);
     redirect("/vendor/dashboard?tab=products&error=product_not_found");
   }
 
-  await removeLocalImages(removedImages);
+  await removeUploadedImages(removedImages);
   redirect("/vendor/dashboard?tab=products&status=product_updated");
 }
 
@@ -397,6 +480,6 @@ export async function vendorDeleteProductAction(formData: FormData) {
     redirect("/vendor/dashboard?tab=products&error=product_not_found");
   }
 
-  await removeLocalImages(deletedProduct.image_urls);
+  await removeUploadedImages(deletedProduct.image_urls);
   redirect("/vendor/dashboard?tab=products&status=product_deleted");
 }
