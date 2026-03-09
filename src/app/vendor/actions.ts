@@ -67,6 +67,24 @@ function parseOptionalNumber(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseOptionalPrice(value: string): number | null {
+  const parsed = parseOptionalNumber(value);
+  if (parsed === null) {
+    return null;
+  }
+  // Normalize floating-point noise and keep at most 2 decimals for currency.
+  return Math.round(parsed * 100) / 100;
+}
+
+function parseOptionalDiscountPercent(value: string): number | null {
+  const parsed = parseOptionalNumber(value);
+  if (parsed === null) {
+    return null;
+  }
+  // Discount is treated as a whole percent.
+  return Math.round(parsed);
+}
+
 function validateProductInput(input: {
   title: string;
   description: string;
@@ -253,6 +271,7 @@ export async function vendorLoginAction(formData: FormData) {
 export async function vendorRegisterAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const companyName = String(formData.get("companyName") ?? "").trim();
+  const address = String(formData.get("address") ?? "").trim();
   const mobile = normalizeMobile(String(formData.get("mobile") ?? ""));
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
@@ -290,6 +309,7 @@ export async function vendorRegisterAction(formData: FormData) {
     const vendor = await createVendor({
       name,
       company_name: companyName,
+      address: address || null,
       mobile,
       email,
       password_hash: hash,
@@ -323,6 +343,7 @@ export async function vendorUpdateProfileAction(formData: FormData) {
 
   const name = String(formData.get("name") ?? "").trim();
   const companyName = String(formData.get("companyName") ?? "").trim();
+  const address = String(formData.get("address") ?? "").trim();
   const whatsappRaw = String(formData.get("whatsappNumber") ?? "").trim();
   const whatsappNumber = whatsappRaw ? normalizeMobile(whatsappRaw) : "";
 
@@ -337,6 +358,7 @@ export async function vendorUpdateProfileAction(formData: FormData) {
   await updateVendorProfile(vendor._id.toString(), {
     name,
     company_name: companyName,
+    address: address || null,
     whatsapp_number: whatsappNumber || null,
   });
 
@@ -349,8 +371,8 @@ export async function vendorCreateProductAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const city = String(formData.get("city") ?? "").trim();
-  const price = parseOptionalNumber(String(formData.get("price") ?? ""));
-  const discountPercent = parseOptionalNumber(String(formData.get("discountPercent") ?? ""));
+  const price = parseOptionalPrice(String(formData.get("price") ?? ""));
+  const discountPercent = parseOptionalDiscountPercent(String(formData.get("discountPercent") ?? ""));
 
   const validationError = validateProductInput({
     title,
@@ -403,8 +425,8 @@ export async function vendorUpdateProductAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const city = String(formData.get("city") ?? "").trim();
-  const price = parseOptionalNumber(String(formData.get("price") ?? ""));
-  const discountPercent = parseOptionalNumber(String(formData.get("discountPercent") ?? ""));
+  const price = parseOptionalPrice(String(formData.get("price") ?? ""));
+  const discountPercent = parseOptionalDiscountPercent(String(formData.get("discountPercent") ?? ""));
 
   const validationError = validateProductInput({
     title,

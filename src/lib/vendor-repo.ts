@@ -7,6 +7,7 @@ export type VendorDocument = {
   _id: ObjectId;
   name: string;
   company_name: string;
+  address: string | null;
   mobile: string;
   whatsapp_number: string | null;
   email: string;
@@ -20,6 +21,7 @@ export type VendorDocument = {
 type CreateVendorInput = {
   name: string;
   company_name: string;
+  address?: string | null;
   mobile: string;
   whatsapp_number?: string | null;
   email: string;
@@ -132,6 +134,7 @@ export async function createVendor(input: CreateVendorInput): Promise<VendorDocu
 
   const doc: VendorDbDocument = {
     ...input,
+    address: input.address ?? null,
     whatsapp_number: input.whatsapp_number ?? null,
     status: input.status ?? "active",
     created_at: now,
@@ -152,7 +155,7 @@ export async function updateVendorLastLogin(vendorId: string, at = new Date()): 
 
 export async function updateVendorProfile(
   vendorId: string,
-  profile: { name: string; company_name: string; whatsapp_number: string | null }
+  profile: { name: string; company_name: string; address: string | null; whatsapp_number: string | null }
 ): Promise<void> {
   if (!ObjectId.isValid(vendorId)) {
     return;
@@ -165,6 +168,7 @@ export async function updateVendorProfile(
       $set: {
         name: profile.name,
         company_name: profile.company_name,
+        address: profile.address,
         whatsapp_number: profile.whatsapp_number,
       },
     }

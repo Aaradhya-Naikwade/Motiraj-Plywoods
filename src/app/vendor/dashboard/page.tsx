@@ -12,10 +12,13 @@ import {
   vendorUpdateProfileAction,
 } from "../actions";
 import DashboardAlerts from "./DashboardAlerts";
+import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 
 type VendorDashboardPageProps = {
-  searchParams: Promise<{ status?: string; error?: string; tab?: string }>;
+  searchParams: Promise<{ status?: string; error?: string; tab?: string; page?: string; edit?: string }>;
 };
+
+const PRODUCTS_PER_PAGE = 6;
 
 function fmtDate(date: Date | null) {
   return date ? date.toLocaleString() : "-";
@@ -42,6 +45,16 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
   const products = await findVendorProductsByVendorId(vendor._id.toString());
   const params = await searchParams;
   const activeTab = params.tab === "products" ? "products" : "profile";
+  const totalPages = Math.max(1, Math.ceil(products.length / PRODUCTS_PER_PAGE));
+  const requestedPage = Number(params.page ?? "1");
+  const currentPage = Number.isFinite(requestedPage)
+    ? Math.min(Math.max(1, Math.floor(requestedPage)), totalPages)
+    : 1;
+  const pageStart = (currentPage - 1) * PRODUCTS_PER_PAGE;
+  const visibleProducts = products.slice(pageStart, pageStart + PRODUCTS_PER_PAGE);
+  const selectedProduct = products.find((product) => product._id.toString() === params.edit) ?? null;
+  const buildProductsUrl = (page: number, editId?: string) =>
+    `/vendor/dashboard?tab=products&page=${page}${editId ? `&edit=${editId}` : ""}`;
 
   return (
     <section className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#f7f2eb_0%,_#efe6dc_42%,_#e6dacc_100%)] px-4 py-8 md:px-8 md:py-10">
@@ -141,6 +154,17 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
                 </label>
 
                 <label className="block md:col-span-2">
+                  <span className="mb-1 block text-sm font-medium text-[var(--black)]">Business Address</span>
+                  <textarea
+                    name="address"
+                    rows={3}
+                    defaultValue={vendor.address ?? ""}
+                    placeholder="Full shop/office address"
+                    className="w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
+                  />
+                </label>
+
+                <label className="block md:col-span-2">
                   <span className="mb-1 block text-sm font-medium text-[var(--black)]">WhatsApp Number</span>
                   <input
                     name="whatsappNumber"
@@ -171,6 +195,10 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
               <div className="rounded-3xl border border-white/80 bg-white/95 p-5 shadow-xl">
                 <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Email</p>
                 <p className="mt-1 break-all text-sm font-semibold text-[var(--black)]">{vendor.email}</p>
+              </div>
+              <div className="rounded-3xl border border-white/80 bg-white/95 p-5 shadow-xl">
+                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Address</p>
+                <p className="mt-1 text-sm font-semibold text-[var(--black)]">{vendor.address || "Not set"}</p>
               </div>
               <div className="rounded-3xl border border-white/80 bg-white/95 p-5 shadow-xl">
                 <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">WhatsApp</p>
@@ -280,156 +308,230 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
                   No products yet. Add your first product using the form.
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {products.map((product) => (
-                    <details
+                <div className="space-y-5">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {visibleProducts.map((product) => (
+                    <div
                       key={product._id.toString()}
-                      className="group rounded-2xl border border-white/80 bg-white/95 p-4 shadow-xl open:ring-2 open:ring-[var(--primary)]/20"
+                      className="rounded-2xl border border-white/80 bg-white/95 p-4 shadow-xl"
                     >
-                      <summary className="list-none cursor-pointer">
-                        <div className="flex flex-wrap items-start justify-between gap-4">
-                          <div className="flex items-start gap-3">
-                            <Image
-                              src={product.image_urls[0] || "/image/plywood.png"}
-                              alt={product.title}
-                              width={96}
-                              height={96}
-                              className="h-20 w-20 rounded-xl object-cover"
-                            />
-                            <div>
-                              <p className="text-base font-semibold text-[var(--black)]">{product.title}</p>
-                              <p className="text-sm text-[var(--darkgray)]">{product.city}</p>
-                              <p className="text-xs text-[var(--darkgray)]">{product.image_urls.length} image(s)</p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <span className="rounded-full bg-[var(--secondary)] px-3 py-1 text-xs font-medium text-[var(--black)]">
-                              {product.price !== null ? `Rs ${product.price.toLocaleString("en-IN")}` : "Price NA"}
-                            </span>
-                            <span className="rounded-full border border-[var(--lightgray)] px-3 py-1 text-xs font-medium text-[var(--darkgray)]">
-                              Edit
-                            </span>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <Image
+                            src={product.image_urls[0] || "/image/plywood.png"}
+                            alt={product.title}
+                            width={96}
+                            height={96}
+                            className="h-20 w-20 rounded-xl object-cover"
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate text-base font-semibold text-[var(--black)]">{product.title}</p>
+                            <p className="text-sm text-[var(--darkgray)]">{product.city}</p>
+                            <p className="text-xs text-[var(--darkgray)]">{product.image_urls.length} image(s)</p>
+                            <p className="mt-1 text-xs text-[var(--darkgray)]">
+                              {product.discount_percent !== null ? `${product.discount_percent}% off` : "No discount"}
+                            </p>
                           </div>
                         </div>
-                      </summary>
 
-                      <div className="mt-5 border-t border-[var(--lightgray)] pt-5">
-                        <div className="mb-4 flex justify-end">
-                          <form action={vendorDeleteProductAction}>
-                            <input type="hidden" name="productId" value={product._id.toString()} />
-                            <button
-                              type="submit"
-                              className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
-                            >
-                              Delete Product
-                            </button>
-                          </form>
-                        </div>
+                        <span className="rounded-full bg-[var(--secondary)] px-3 py-1 text-xs font-medium text-[var(--black)]">
+                          {product.price !== null
+                            ? `Rs ${product.price.toLocaleString("en-IN", {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 2,
+                              })}`
+                            : "Price NA"}
+                        </span>
+                      </div>
 
-                        <form action={vendorUpdateProductAction} className="grid gap-4 md:grid-cols-2">
+                      <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--lightgray)] pt-3">
+                        <a
+                          href={buildProductsUrl(currentPage, product._id.toString())}
+                          className="rounded-lg border border-[var(--lightgray)] px-3 py-1.5 text-xs font-semibold text-[var(--black)] transition hover:bg-[var(--secondary)]"
+                        >
+                          Edit Product
+                        </a>
+                        <form action={vendorDeleteProductAction}>
                           <input type="hidden" name="productId" value={product._id.toString()} />
+                          <ConfirmSubmitButton
+                            confirmMessage="Are you sure you want to delete this product?"
+                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                          >
+                            Delete Product
+                          </ConfirmSubmitButton>
+                        </form>
+                      </div>
+                    </div>
+                    ))}
+                  </div>
 
-                          <label className="block">
-                            <span className="mb-1 block text-sm font-medium text-[var(--black)]">Product Title *</span>
-                            <input
-                              name="title"
-                              type="text"
-                              required
-                              defaultValue={product.title}
-                              className="w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                            />
-                          </label>
+                  {totalPages > 1 ? (
+                    <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                      <a
+                        href={buildProductsUrl(Math.max(1, currentPage - 1))}
+                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                          currentPage === 1
+                            ? "pointer-events-none border-[var(--lightgray)] text-[var(--darkgray)]/60"
+                            : "border-[var(--lightgray)] text-[var(--black)] hover:bg-[var(--secondary)]"
+                        }`}
+                      >
+                        Prev
+                      </a>
 
-                          <label className="block">
-                            <span className="mb-1 block text-sm font-medium text-[var(--black)]">City *</span>
-                            <input
-                              name="city"
-                              type="text"
-                              required
-                              defaultValue={product.city}
-                              className="w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                            />
-                          </label>
+                      {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pageNumber) => (
+                        <a
+                          key={pageNumber}
+                          href={buildProductsUrl(pageNumber)}
+                          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                            pageNumber === currentPage
+                              ? "bg-[var(--black)] text-white"
+                              : "border border-[var(--lightgray)] text-[var(--black)] hover:bg-[var(--secondary)]"
+                          }`}
+                        >
+                          {pageNumber}
+                        </a>
+                      ))}
 
-                          <label className="block">
-                            <span className="mb-1 block text-sm font-medium text-[var(--black)]">Price</span>
-                            <input
-                              name="price"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              defaultValue={product.price ?? ""}
-                              className="w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                            />
-                          </label>
+                      <a
+                        href={buildProductsUrl(Math.min(totalPages, currentPage + 1))}
+                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                          currentPage === totalPages
+                            ? "pointer-events-none border-[var(--lightgray)] text-[var(--darkgray)]/60"
+                            : "border-[var(--lightgray)] text-[var(--black)] hover:bg-[var(--secondary)]"
+                        }`}
+                      >
+                        Next
+                      </a>
+                    </div>
+                  ) : null}
 
-                          <label className="block">
-                            <span className="mb-1 block text-sm font-medium text-[var(--black)]">Discount %</span>
-                            <input
-                              name="discountPercent"
-                              type="number"
-                              min="0"
-                              max="99"
-                              defaultValue={product.discount_percent ?? ""}
-                              className="w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                            />
-                          </label>
+                  {selectedProduct ? (
+                    <div className="fixed inset-0 z-[95] flex items-start justify-center overflow-y-auto bg-black/60 p-2 backdrop-blur-[2px] md:items-center md:p-4">
+                      <div className="my-2 w-full max-w-5xl rounded-2xl border border-white/80 bg-white shadow-2xl md:my-0 md:rounded-3xl">
+                        <div className="flex items-center justify-between gap-4 rounded-t-2xl border-b border-[var(--lightgray)] bg-[linear-gradient(135deg,#f8efe3_0%,#f4e7d8_100%)] px-4 py-3 md:rounded-t-3xl md:px-5 md:py-4">
+                          <div>
+                            <h4 className="text-lg font-semibold text-[var(--black)]">Edit Product</h4>
+                            <p className="text-xs text-[var(--darkgray)]">{selectedProduct.title}</p>
+                          </div>
+                          <a
+                            href={buildProductsUrl(currentPage)}
+                            aria-label="Close edit modal"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--lightgray)] bg-white text-base font-semibold leading-none text-[var(--black)] transition hover:bg-[var(--secondary)]"
+                          >x</a>
+                        </div>
 
-                          <label className="block md:col-span-2">
-                            <span className="mb-1 block text-sm font-medium text-[var(--black)]">Description *</span>
-                            <textarea
-                              name="description"
-                              rows={3}
-                              required
-                              defaultValue={product.description}
-                              className="w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                            />
-                          </label>
+                        <form action={vendorUpdateProductAction} className="grid gap-3 p-4 md:grid-cols-3 md:gap-4 md:p-5">
+                          <input type="hidden" name="productId" value={selectedProduct._id.toString()} />
 
-                          <div className="md:col-span-2">
-                            <p className="mb-2 text-sm font-medium text-[var(--black)]">Current Images</p>
-                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                              {product.image_urls.map((imageUrl) => (
-                                <label key={imageUrl} className="rounded-xl border border-[var(--lightgray)] p-2">
+                          <div className="grid gap-3 sm:grid-cols-2 md:col-span-2">
+                            <label className="block">
+                              <span className="mb-1 block text-sm font-medium text-[var(--black)]">Product Title *</span>
+                              <input
+                                name="title"
+                                type="text"
+                                required
+                                defaultValue={selectedProduct.title}
+                                className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
+                              />
+                            </label>
+
+                            <label className="block">
+                              <span className="mb-1 block text-sm font-medium text-[var(--black)]">City *</span>
+                              <input
+                                name="city"
+                                type="text"
+                                required
+                                defaultValue={selectedProduct.city}
+                                className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
+                              />
+                            </label>
+
+                            <label className="block">
+                              <span className="mb-1 block text-sm font-medium text-[var(--black)]">Price</span>
+                              <input
+                                name="price"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                defaultValue={selectedProduct.price ?? ""}
+                                className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
+                              />
+                            </label>
+
+                            <label className="block">
+                              <span className="mb-1 block text-sm font-medium text-[var(--black)]">Discount %</span>
+                              <input
+                                name="discountPercent"
+                                type="number"
+                                min="0"
+                                max="99"
+                                step="1"
+                                defaultValue={selectedProduct.discount_percent ?? ""}
+                                className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
+                              />
+                            </label>
+
+                            <label className="block sm:col-span-2">
+                              <span className="mb-1 block text-sm font-medium text-[var(--black)]">Description *</span>
+                              <textarea
+                                name="description"
+                                rows={2}
+                                required
+                                defaultValue={selectedProduct.description}
+                                className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
+                              />
+                            </label>
+                          </div>
+
+                          <aside className="rounded-xl border border-[var(--lightgray)] bg-[var(--secondary)]/40 p-3 md:rounded-2xl">
+                            <p className="mb-2 text-sm font-semibold text-[var(--black)]">Current Images</p>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                              {selectedProduct.image_urls.map((imageUrl) => (
+                                <label key={imageUrl} className="rounded-lg border border-[var(--lightgray)] bg-white p-1.5">
                                   <Image
                                     src={imageUrl}
-                                    alt={product.title}
-                                    width={240}
-                                    height={160}
-                                    className="h-28 w-full rounded-lg object-cover"
+                                    alt={selectedProduct.title}
+                                    width={120}
+                                    height={80}
+                                    className="h-20 w-full rounded-md object-cover sm:h-16"
                                   />
-                                  <span className="mt-2 flex items-center gap-2 text-xs text-[var(--darkgray)]">
+                                  <span className="mt-1 flex items-center gap-1 text-[11px] text-[var(--darkgray)]">
                                     <input type="checkbox" name="removeImage" value={imageUrl} /> Remove
                                   </span>
                                 </label>
                               ))}
                             </div>
-                          </div>
 
-                          <label className="block md:col-span-2">
-                            <span className="mb-1 block text-sm font-medium text-[var(--black)]">Add More Images</span>
-                            <input
-                              name="images"
-                              type="file"
-                              accept="image/png,image/jpeg,image/webp"
-                              multiple
-                              className="w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm"
-                            />
-                          </label>
+                            <label className="mt-3 block">
+                              <span className="mb-1 block text-xs font-medium text-[var(--black)]">Add More Images</span>
+                              <input
+                                name="images"
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                multiple
+                                className="text-[var(--black)] w-full rounded-lg border border-[var(--lightgray)] bg-white px-2 py-2 text-xs"
+                              />
+                            </label>
+                          </aside>
 
-                          <div className="md:col-span-2">
+                          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--lightgray)] pt-3 md:col-span-3">
+                            <a
+                              href={buildProductsUrl(currentPage)}
+                              className="w-full rounded-xl border border-[var(--lightgray)] px-4 py-2.5 text-center text-sm font-semibold text-[var(--black)] transition hover:bg-[var(--secondary)] sm:w-auto"
+                            >
+                              Cancel
+                            </a>
                             <button
                               type="submit"
-                              className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90 md:w-auto md:px-8"
+                              className="w-full rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90 sm:w-auto"
                             >
                               Save Product Changes
                             </button>
                           </div>
                         </form>
                       </div>
-                    </details>
-                  ))}
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -439,3 +541,4 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
     </section>
   );
 }
+

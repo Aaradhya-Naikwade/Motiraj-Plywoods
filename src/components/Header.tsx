@@ -14,6 +14,10 @@ type HeaderProps = {
 const Header = ({ isVendorLoggedIn }: HeaderProps) => {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const isVendorsActive = pathname === "/vendor";
+  const isHomeActive = pathname === "/";
+  const isAboutActive = pathname === "/about";
+  const isContactActive = pathname === "/contact";
   const shouldHideHeader =
     pathname.startsWith("/admin") ||
     pathname === "/vendor/auth" ||
@@ -70,16 +74,18 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
         {/* Logo */}
         <div className="flex items-center gap-2 md:gap-3 justify-center flex-1 md:flex-none">
           <div className="relative w-9 h-9 md:w-12 md:h-12 overflow-hidden">
-            <Image
-              src="/image/logo.png"
-              alt="Ratlami Interio Logo"
-              fill
-              className="object-contain"
-            />
+            <Link href="/" aria-label="Go to homepage">
+              <Image
+                src="/image/logo.png"
+                alt="Ratlami Interio Logo"
+                fill
+                className="object-contain"
+              />
+            </Link>
           </div>
-          <h1 className="text-lg md:text-3xl font-serif font-semibold text-[#5d3a1a] tracking-tight">
+          <Link href="/" className="text-lg md:text-3xl font-serif font-semibold text-[#5d3a1a] tracking-tight">
             RATLAMIINTERIO
-          </h1>
+          </Link>
         </div>
 
         {/* Desktop Nav */}
@@ -88,7 +94,7 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
           <Link
             href="/vendor"
             className={
-              pathname === "/vendor" || pathname.startsWith("/vendor/")
+              isVendorsActive
                 ? activeNav
                 : `${navItem} hover:bg-black hover:text-white`
             }
@@ -99,7 +105,18 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
           <Link
             href="/"
             className={
-              pathname === "/"
+              isHomeActive
+                ? activeNav
+                : `${navItem} hover:bg-black hover:text-white`
+            }
+          >
+            Home
+          </Link>
+
+          <Link
+            href="/about"
+            className={
+              isAboutActive
                 ? activeNav
                 : `${navItem} hover:bg-black hover:text-white`
             }
@@ -110,7 +127,7 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
           <Link
             href="/contact"
             className={
-              pathname === "/contact"
+              isContactActive
                 ? activeNav
                 : `${navItem} hover:bg-black hover:text-white`
             }
@@ -162,6 +179,10 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
           </Link>
 
           <Link href="/" onClick={() => setIsOpen(false)}>
+            Home
+          </Link>
+
+          <Link href="/about" onClick={() => setIsOpen(false)}>
             About
           </Link>
 
