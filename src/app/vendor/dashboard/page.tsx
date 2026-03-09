@@ -21,7 +21,13 @@ type VendorDashboardPageProps = {
 const PRODUCTS_PER_PAGE = 6;
 
 function fmtDate(date: Date | null) {
-  return date ? date.toLocaleString() : "-";
+  return date
+    ? date.toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : "-";
 }
 
 export default async function VendorDashboardPage({ searchParams }: VendorDashboardPageProps) {
