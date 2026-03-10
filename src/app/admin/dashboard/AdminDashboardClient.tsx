@@ -435,7 +435,7 @@ export default function AdminDashboardClient({
         }`}
       >
         <aside
-          className={`rounded-[28px] border border-[#a98a63] bg-[#947a57] p-4 text-white shadow-2xl lg:h-[calc(100vh-3rem)] ${
+          className={`rounded-[28px] border border-white/80 bg-[linear-gradient(180deg,#2e2a26_0%,#1f1c19_100%)] p-4 text-white shadow-2xl lg:h-[calc(100vh-3rem)] ${
             sidebarCollapsed ? "lg:w-[96px]" : "lg:w-[280px]"
           }`}
         >
