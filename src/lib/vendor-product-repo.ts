@@ -10,6 +10,7 @@ export type VendorProductDocument = {
   price: number | null;
   discount_percent: number | null;
   image_urls: string[];
+  hidden?: boolean;
   created_at: Date;
   updated_at: Date;
 };
@@ -71,6 +72,7 @@ export async function createVendorProduct(input: CreateVendorProductInput): Prom
     price: input.price,
     discount_percent: input.discount_percent,
     image_urls: input.image_urls,
+    hidden: false,
     created_at: now,
     updated_at: now,
   };
@@ -86,13 +88,31 @@ export async function findVendorProductsByVendorId(vendorId: string): Promise<Ve
 
   const collection = await getProductCollection();
   const docs = await collection.find({ vendor_id: new ObjectId(vendorId) }).sort({ created_at: -1 }).toArray();
-  return docs.filter((doc): doc is VendorProductDocument => Boolean(doc._id));
+  return docs
+    .filter((doc): doc is VendorProductDocument => Boolean(doc._id))
+    .map((doc) => ({ ...doc, hidden: doc.hidden ?? false }));
 }
 
 export async function findAllVendorProducts(): Promise<VendorProductDocument[]> {
   const collection = await getProductCollection();
   const docs = await collection.find({}).sort({ created_at: -1 }).toArray();
-  return docs.filter((doc): doc is VendorProductDocument => Boolean(doc._id));
+  return docs
+    .filter((doc): doc is VendorProductDocument => Boolean(doc._id))
+    .map((doc) => ({ ...doc, hidden: doc.hidden ?? false }));
+}
+
+export async function findVisibleVendorProducts(): Promise<VendorProductDocument[]> {
+  const collection = await getProductCollection();
+  const docs = await collection
+    .find({
+      $or: [{ hidden: { $exists: false } }, { hidden: false }],
+    })
+    .sort({ created_at: -1 })
+    .toArray();
+
+  return docs
+    .filter((doc): doc is VendorProductDocument => Boolean(doc._id))
+    .map((doc) => ({ ...doc, hidden: false }));
 }
 
 export async function findVendorProductById(productId: string): Promise<VendorProductDocument | null> {
@@ -104,7 +124,7 @@ export async function findVendorProductById(productId: string): Promise<VendorPr
   if (!doc?._id) {
     return null;
   }
-  return doc;
+  return { ...doc, hidden: doc.hidden ?? false };
 }
 
 export async function updateVendorProduct(
@@ -149,4 +169,51 @@ export async function deleteVendorProduct(productId: string, vendorId: string): 
     return null;
   }
   return doc;
+}
+
+export async function adminSetVendorProductHidden(productId: string, hidden: boolean): Promise<boolean> {
+  if (!ObjectId.isValid(productId)) {
+    return false;
+  }
+
+  const collection = await getProductCollection();
+  const result = await collection.updateOne(
+    { _id: new ObjectId(productId) },
+    { $set: { hidden, updated_at: new Date() } }
+  );
+
+  return result.matchedCount > 0;
+}
+
+export async function adminDeleteVendorProduct(productId: string): Promise<VendorProductDocument | null> {
+  if (!ObjectId.isValid(productId)) {
+    return null;
+  }
+
+  const collection = await getProductCollection();
+  const doc = await collection.findOneAndDelete({ _id: new ObjectId(productId) });
+  if (!doc?._id) {
+    return null;
+  }
+  return { ...doc, hidden: doc.hidden ?? false };
+}
+
+export async function deleteVendorProductsByVendorId(vendorId: string): Promise<VendorProductDocument[]> {
+  if (!ObjectId.isValid(vendorId)) {
+    return [];
+  }
+
+  const collection = await getProductCollection();
+  const docs = await collection
+    .find({ vendor_id: new ObjectId(vendorId) })
+    .toArray();
+
+  if (docs.length === 0) {
+    return [];
+  }
+
+  await collection.deleteMany({ vendor_id: new ObjectId(vendorId) });
+  return docs
+    .filter((doc): doc is VendorProductDocument => Boolean(doc._id))
+    .map((doc) => ({ ...doc, hidden: doc.hidden ?? false }));
 }

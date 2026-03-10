@@ -1,10 +1,10 @@
 import VendorHero from "@/components/VendorHero";
 import VendorProducts from "@/components/VendorProducts";
-import { findAllVendorProducts } from "@/lib/vendor-product-repo";
+import { findVisibleVendorProducts } from "@/lib/vendor-product-repo";
 import { findVendorsByIds } from "@/lib/vendor-repo";
 
 export default async function VendorPage() {
-  const products = await findAllVendorProducts();
+  const products = await findVisibleVendorProducts();
   const vendorIds = products.map((product) => product.vendor_id.toString());
   const vendors = await findVendorsByIds(vendorIds);
   const vendorMap = new Map(vendors.map((vendor) => [vendor._id.toString(), vendor]));

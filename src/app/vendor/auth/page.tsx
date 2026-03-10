@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { VENDOR_AUTH_COOKIE, normalizeMobile } from "@/lib/vendor-auth";
 import { vendorLoginAction, vendorRegisterAction } from "../actions";
+import PasswordField from "@/components/PasswordField";
 
 type VendorAuthPageProps = {
   searchParams: Promise<{ tab?: string; error?: string; mobile?: string; email?: string }>;
@@ -19,6 +20,8 @@ function getVendorErrorMessage(error?: string): string | null {
       return "User does not exist. Please register first.";
     case "account_blocked":
       return "Your vendor account is blocked. Please contact support.";
+    case "account_inactive":
+      return "Your vendor account is inactive. Please contact support.";
     case "account_pending":
       return "Your vendor account is pending approval.";
     case "missing_fields":
@@ -103,12 +106,10 @@ export default async function VendorAuthPage({ searchParams }: VendorAuthPagePro
 
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-[var(--black)]">Password</span>
-              <input
+              <PasswordField
                 name="password"
-                type="password"
                 required
                 placeholder="Enter your password"
-                className="w-full rounded-lg border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)]"
               />
             </label>
 
@@ -191,12 +192,10 @@ export default async function VendorAuthPage({ searchParams }: VendorAuthPagePro
 
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-[var(--black)]">Password *</span>
-              <input
+              <PasswordField
                 name="password"
-                type="password"
                 required
                 placeholder="Minimum 8 characters"
-                className="w-full rounded-lg border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)]"
               />
             </label>
 
@@ -204,12 +203,10 @@ export default async function VendorAuthPage({ searchParams }: VendorAuthPagePro
               <span className="mb-1 block text-sm font-medium text-[var(--black)]">
                 Confirm Password *
               </span>
-              <input
+              <PasswordField
                 name="confirmPassword"
-                type="password"
                 required
                 placeholder="Retype password"
-                className="w-full rounded-lg border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)]"
               />
             </label>
 

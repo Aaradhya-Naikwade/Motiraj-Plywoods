@@ -3,12 +3,11 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { MongoServerError } from "mongodb";
-import { unlink } from "fs/promises";
-import path from "path";
 import { createHash } from "crypto";
 import { VENDOR_AUTH_COOKIE, VENDOR_SESSION_TTL_SECONDS, createVendorSessionToken, hashPassword, isStrongPassword, isValidMobile, normalizeMobile, verifyPassword, verifyVendorSessionToken } from "@/lib/vendor-auth";
 import { createVendor, findVendorById, findVendorByMobile, updateVendorLastLogin, updateVendorProfile } from "@/lib/vendor-repo";
 import { createVendorProduct, deleteVendorProduct, findVendorProductById, updateVendorProduct } from "@/lib/vendor-product-repo";
+import { removeUploadedImages } from "@/lib/vendor-product-images";
 
 function buildRedirect(path: string, params: Record<string, string | undefined>) {
   const search = new URLSearchParams();
@@ -163,74 +162,6 @@ async function storeProductImages(files: File[]): Promise<string[]> {
   return urls;
 }
 
-function getCloudinaryPublicIdFromUrl(imageUrl: string): string | null {
-  try {
-    const parsed = new URL(imageUrl);
-    if (!parsed.hostname.includes("res.cloudinary.com")) {
-      return null;
-    }
-
-    const marker = "/upload/";
-    const uploadIndex = parsed.pathname.indexOf(marker);
-    if (uploadIndex === -1) {
-      return null;
-    }
-
-    const afterUpload = parsed.pathname.slice(uploadIndex + marker.length);
-    const parts = afterUpload.split("/").filter(Boolean);
-    if (parts.length === 0) {
-      return null;
-    }
-
-    // Skip version segment like v1700000000 if present.
-    const versionStart = parts[0].startsWith("v") ? 1 : 0;
-    if (versionStart >= parts.length) {
-      return null;
-    }
-
-    const pathWithExt = parts.slice(versionStart).join("/");
-    const lastDot = pathWithExt.lastIndexOf(".");
-    return lastDot > 0 ? pathWithExt.slice(0, lastDot) : pathWithExt;
-  } catch {
-    return null;
-  }
-}
-
-async function removeUploadedImages(imageUrls: string[]) {
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
-
-  for (const imageUrl of imageUrls) {
-    const publicId = getCloudinaryPublicIdFromUrl(imageUrl);
-    if (publicId && cloudName && apiKey && apiSecret) {
-      const timestamp = Math.floor(Date.now() / 1000).toString();
-      const paramsToSign = `public_id=${publicId}&timestamp=${timestamp}`;
-      const signature = createHash("sha1").update(`${paramsToSign}${apiSecret}`).digest("hex");
-
-      const payload = new FormData();
-      payload.set("public_id", publicId);
-      payload.set("timestamp", timestamp);
-      payload.set("api_key", apiKey);
-      payload.set("signature", signature);
-
-      await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`, {
-        method: "POST",
-        body: payload,
-        cache: "no-store",
-      }).catch(() => undefined);
-      continue;
-    }
-
-    if (!imageUrl.startsWith("/uploads/vendor-products/")) {
-      continue;
-    }
-    const filename = imageUrl.replace("/uploads/vendor-products/", "");
-    const filePath = path.join(process.cwd(), "public", "uploads", "vendor-products", filename);
-    await unlink(filePath).catch(() => undefined);
-  }
-}
-
 export async function vendorLoginAction(formData: FormData) {
   const mobile = normalizeMobile(String(formData.get("mobile") ?? ""));
   const password = String(formData.get("password") ?? "");
@@ -245,6 +176,10 @@ export async function vendorLoginAction(formData: FormData) {
     redirect(buildRedirect("/vendor/auth", { tab: "register", error: "user_not_found", mobile }));
   }
   
+  if (existingVendor.status === "inactive") {
+    redirect(buildRedirect("/vendor/auth", { tab: "login", error: "account_inactive", mobile }));
+  }
+
   if (existingVendor.status === "blocked") {
     redirect(buildRedirect("/vendor/auth", { tab: "login", error: "account_blocked", mobile }));
   }

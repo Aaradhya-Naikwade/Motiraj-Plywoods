@@ -1,7 +1,7 @@
 import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/mongodb";
 
-export type VendorStatus = "active" | "pending" | "blocked";
+export type VendorStatus = "active" | "inactive" | "pending" | "blocked";
 
 export type VendorDocument = {
   _id: ObjectId;
@@ -128,6 +128,12 @@ export async function findVendorsByIds(ids: string[]): Promise<VendorDocument[]>
   return collection.find({ _id: { $in: objectIds } }).toArray() as Promise<VendorDocument[]>;
 }
 
+export async function findAllVendors(): Promise<VendorDocument[]> {
+  const collection = await getVendorCollection();
+  const docs = await collection.find({}).sort({ created_at: -1 }).toArray();
+  return docs.filter((doc): doc is VendorDocument => Boolean(doc._id));
+}
+
 export async function createVendor(input: CreateVendorInput): Promise<VendorDocument> {
   const collection = await getVendorCollection();
   const now = new Date();
@@ -173,4 +179,48 @@ export async function updateVendorProfile(
       },
     }
   );
+}
+
+export async function adminUpdateVendor(
+  vendorId: string,
+  profile: {
+    name: string;
+    company_name: string;
+    address: string | null;
+    whatsapp_number: string | null;
+    status: Extract<VendorStatus, "active" | "inactive">;
+  }
+): Promise<boolean> {
+  if (!ObjectId.isValid(vendorId)) {
+    return false;
+  }
+
+  const collection = await getVendorCollection();
+  const result = await collection.updateOne(
+    { _id: new ObjectId(vendorId) },
+    {
+      $set: {
+        name: profile.name,
+        company_name: profile.company_name,
+        address: profile.address,
+        whatsapp_number: profile.whatsapp_number,
+        status: profile.status,
+      },
+    }
+  );
+
+  return result.matchedCount > 0;
+}
+
+export async function deleteVendorById(vendorId: string): Promise<VendorDocument | null> {
+  if (!ObjectId.isValid(vendorId)) {
+    return null;
+  }
+
+  const collection = await getVendorCollection();
+  const doc = await collection.findOneAndDelete({ _id: new ObjectId(vendorId) });
+  if (!doc?._id) {
+    return null;
+  }
+  return doc as VendorDocument;
 }

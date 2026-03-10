@@ -1,6 +1,15 @@
 import { Mail, MapPin, Phone } from "lucide-react";
+import { submitContactLeadAction } from "./actions";
 
-export default function ContactPage() {
+type ContactPageProps = {
+  searchParams: Promise<{ status?: string; error?: string }>;
+};
+
+export default async function ContactPage({ searchParams }: ContactPageProps) {
+  const params = await searchParams;
+  const isSuccess = params.status === "success";
+  const hasError = params.error === "missing_fields";
+
   return (
     <main className="min-h-screen bg-[var(--secondary)] px-4 py-10 md:px-8 md:py-14">
       <div className="mx-auto grid w-full max-w-6xl gap-8 md:grid-cols-5">
@@ -59,14 +68,28 @@ export default function ContactPage() {
             Fill in your details and our team will contact you.
           </p>
 
-          <form className="mt-6 space-y-4">
+          {isSuccess ? (
+            <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              Your message has been submitted successfully.
+            </p>
+          ) : null}
+
+          {hasError ? (
+            <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              Please fill in all fields before submitting.
+            </p>
+          ) : null}
+
+          <form action={submitContactLeadAction} className="mt-6 space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-[var(--black)]">
                   Full Name
                 </span>
                 <input
+                  name="name"
                   type="text"
+                  required
                   placeholder="Your name"
                   className="w-full rounded-lg border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)]"
                 />
@@ -77,7 +100,9 @@ export default function ContactPage() {
                   Phone Number
                 </span>
                 <input
+                  name="phone"
                   type="tel"
+                  required
                   placeholder="Your phone number"
                   className="w-full rounded-lg border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)]"
                 />
@@ -89,7 +114,9 @@ export default function ContactPage() {
                 Email Address
               </span>
               <input
+                name="email"
                 type="email"
+                required
                 placeholder="you@example.com"
                 className="w-full rounded-lg border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)]"
               />
@@ -100,7 +127,9 @@ export default function ContactPage() {
                 Message
               </span>
               <textarea
+                name="message"
                 rows={5}
+                required
                 placeholder="Tell us about your requirement..."
                 className="w-full rounded-lg border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)]"
               />
