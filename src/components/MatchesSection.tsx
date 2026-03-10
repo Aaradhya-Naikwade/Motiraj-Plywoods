@@ -24,22 +24,28 @@ const MatchesSection = () => {
         <h2 className="text-4xl md:text-5xl font-bold text-[#3A3A3A] mb-8">Matches For You</h2>
         
         {/* Tabs with Underline as per image_c5c3e0.png */}
-        <div className="flex flex-wrap gap-0 mb-12 border border-[#B88E2F] w-fit rounded-lg overflow-hidden bg-white">
+        <div className="mb-8 md:mb-12 md:w-fit">
+          <div className="grid grid-cols-3 gap-2 md:flex md:w-fit md:gap-0 md:overflow-hidden md:rounded-lg md:border md:border-[#B88E2F] md:bg-white">
           {categories.map((cat) => (
-            <div key={cat} className="relative">
+            <div key={cat} className="relative min-w-0 md:w-auto">
               <button
                 onClick={() => setActiveTab(cat)}
-                className={`px-8 py-4 text-sm md:text-base font-medium transition-all border-r border-[#B88E2F] 
-                  ${activeTab === cat ? 'text-black' : 'text-gray-500'}
+                className={`flex h-full w-full items-center justify-center rounded-lg border px-3 py-3 text-center text-[11px] font-medium leading-tight transition-all md:rounded-none md:border-0 md:border-r md:px-8 md:py-4 md:text-base
+                  ${
+                    activeTab === cat
+                      ? 'border-[#B88E2F] bg-[#8D421E] text-white md:bg-white md:text-black'
+                      : 'border-[#D8C3A0] bg-white text-[#6F6F6F] hover:border-[#B88E2F] hover:text-[#3A3A3A]'
+                  }
                 `}
               >
                 {cat}
               </button>
               {activeTab === cat && (
-                <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-12 h-1 bg-[#8D421E] rounded-full" />
+                <div className="absolute bottom-1 left-1/2 hidden h-1 w-12 -translate-x-1/2 rounded-full bg-[#8D421E] md:block" />
               )}
             </div>
           ))}
+          </div>
         </div>
 
         {/* Swiper Slider with 3.2 view to show 4th card peeking */}
@@ -95,7 +101,7 @@ const MatchesSection = () => {
 
   </div>
 </SwiperSlide>
-          ))}x
+          ))}
         </Swiper>
       </div>
     </section>

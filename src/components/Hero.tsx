@@ -112,6 +112,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Video } from "lucide-react";
 
 const Hero = () => {
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -201,8 +202,22 @@ const Hero = () => {
         <img
           src="/image/hero.png"
           alt="Hero Banner"
-          className="w-full h-auto object-contain"
+          className="hidden w-full h-auto object-contain md:block"
         />
+        <img
+          src="/image/mobile-hero.jpeg"
+          alt="Hero Banner"
+          className="block w-full h-auto object-contain md:hidden"
+        />
+
+        {/* <div className="absolute bottom-6 left-4 z-20 md:hidden">
+          <div className="inline-block rounded-tl-3xl bg-gradient-to-r from-[#947A57] to-[#F5F2EE] p-[2px]">
+            <button className="flex items-center gap-2 rounded-tl-3xl bg-white px-6 py-3 text-sm font-medium text-black shadow-md">
+              <Video size={16} />
+              <span>Check Via Video call</span>
+            </button>
+          </div>
+        </div> */}
 
         <div className="w-full flex h-2 md:h-3">
           <div className="flex-[1.5] bg-[var(--primary)]"></div>

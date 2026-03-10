@@ -2,10 +2,10 @@
 
 const MotirajGallerySection = () => {
   return (
-    <section className="w-full bg-[#F2F2F2] py-20">
+    <section className="w-full bg-white py-20 md:bg-[#F2F2F2]">
 
       {/* Heading (kept centered with normal container) */}
-      <div className="max-w-7xl mx-auto px-4 md:px-10 text-center mb-16">
+      <div className="max-w-7xl mx-auto mb-16 px-4 pt-6 text-center md:px-10 md:pt-0">
         <p className="text-gray-500 text-sm">
           Share your setup with
         </p>
@@ -16,7 +16,11 @@ const MotirajGallerySection = () => {
       
       {/* FULL WIDTH IMAGE */}
       <div
-        className="w-full h-[700px] bg-no-repeat bg-cover bg-center"
+        className="block h-[520px] w-full bg-cover bg-center bg-no-repeat md:hidden"
+        style={{ backgroundImage: "url('/image/mobile-gallery.jpeg')" }}
+      />
+      <div
+        className="hidden h-[700px] w-full bg-cover bg-center bg-no-repeat md:block"
         style={{ backgroundImage: "url('/image/gallery-layout.png')" }}
       />
 
