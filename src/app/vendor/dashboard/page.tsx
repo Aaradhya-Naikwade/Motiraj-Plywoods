@@ -1,8 +1,9 @@
 import Image from "next/image";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { findVendorById } from "@/lib/vendor-repo";
+import { findVendorById, setVendorStatus } from "@/lib/vendor-repo";
 import { findVendorProductsByVendorId } from "@/lib/vendor-product-repo";
+import { isVendorRenewalExpired } from "@/lib/vendor-renewal";
 import { VENDOR_AUTH_COOKIE, verifyVendorSessionToken } from "@/lib/vendor-auth";
 import {
   vendorCreateProductAction,
@@ -30,6 +31,15 @@ function fmtDate(date: Date | null) {
     : "-";
 }
 
+function fmtDateOnly(date: Date | null) {
+  return date
+    ? date.toLocaleDateString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        dateStyle: "medium",
+      })
+    : "-";
+}
+
 export default async function VendorDashboardPage({ searchParams }: VendorDashboardPageProps) {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get(VENDOR_AUTH_COOKIE)?.value;
@@ -48,6 +58,67 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
     redirect("/vendor/auth");
   }
 
+  if (vendor.status === "locked") {
+    redirect("/vendor/auth?tab=login&error=renewal_required");
+  }
+
+  if (vendor.status === "pending") {
+    return (
+      <section className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#f7f2eb_0%,_#efe6dc_42%,_#e6dacc_100%)] px-4 py-8 md:px-8 md:py-10">
+        <div className="mx-auto max-w-3xl space-y-6">
+          <div className="rounded-3xl border border-white/70 bg-white/90 p-6 shadow-xl backdrop-blur md:p-8">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-[var(--darkgray)]">Vendor Portal</p>
+                <h1 className="mt-2 text-3xl font-semibold text-[var(--black)] md:text-4xl">Approval Pending</h1>
+                <p className="mt-2 text-sm text-[var(--darkgray)]">
+                  Your account is registered successfully. Please wait for admin approval to start using dashboard features.
+                </p>
+              </div>
+
+              <form action={vendorLogoutAction}>
+                <button
+                  type="submit"
+                  className="rounded-full border border-[var(--lightgray)] bg-white px-5 py-2.5 text-sm font-medium text-[var(--black)] transition hover:bg-[var(--secondary)]"
+                >
+                  Logout
+                </button>
+              </form>
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Your account is currently in <span className="font-semibold">Pending</span> status. You cannot edit profile or manage products until admin sets it to <span className="font-semibold">Active</span>.
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-[var(--lightgray)] bg-white px-4 py-3">
+                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Company</p>
+                <p className="mt-1 text-sm font-semibold text-[var(--black)]">{vendor.company_name}</p>
+              </div>
+              <div className="rounded-2xl border border-[var(--lightgray)] bg-white px-4 py-3">
+                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Status</p>
+                <p className="mt-1 text-sm font-semibold text-[var(--black)] capitalize">{vendor.status}</p>
+              </div>
+              <div className="rounded-2xl border border-[var(--lightgray)] bg-white px-4 py-3">
+                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Mobile</p>
+                <p className="mt-1 text-sm font-semibold text-[var(--black)]">{vendor.mobile}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (vendor.status !== "active") {
+    redirect("/vendor/auth?tab=login&error=account_inactive");
+  }
+
+  if (isVendorRenewalExpired(vendor)) {
+    await setVendorStatus(vendor._id.toString(), "locked");
+    redirect("/vendor/auth?tab=login&error=renewal_required");
+  }
+
   const products = await findVendorProductsByVendorId(vendor._id.toString());
   const params = await searchParams;
   const activeTab = params.tab === "products" ? "products" : "profile";
@@ -61,6 +132,10 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
   const selectedProduct = products.find((product) => product._id.toString() === params.edit) ?? null;
   const buildProductsUrl = (page: number, editId?: string) =>
     `/vendor/dashboard?tab=products&page=${page}${editId ? `&edit=${editId}` : ""}`;
+  const vendorDobValue = vendor.dob ? vendor.dob.toISOString().slice(0, 10) : "";
+  const dobMaxDate = new Date();
+  dobMaxDate.setFullYear(dobMaxDate.getFullYear() - 18);
+  const maxDobValue = dobMaxDate.toISOString().slice(0, 10);
 
   return (
     <section className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#f7f2eb_0%,_#efe6dc_42%,_#e6dacc_100%)] px-4 py-8 md:px-8 md:py-10">
@@ -182,6 +257,18 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
                   />
                 </label>
 
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-[var(--black)]">Date of Birth</span>
+                  <input
+                    name="dob"
+                    type="date"
+                    required
+                    defaultValue={vendorDobValue}
+                    max={maxDobValue}
+                    className="w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
+                  />
+                </label>
+
                 <div className="md:col-span-2">
                   <button
                     type="submit"
@@ -199,16 +286,18 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
                 <p className="mt-1 text-sm font-semibold text-[var(--black)]">{vendor.mobile}</p>
               </div>
               <div className="rounded-3xl border border-white/80 bg-white/95 p-5 shadow-xl">
-                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Email</p>
-                <p className="mt-1 break-all text-sm font-semibold text-[var(--black)]">{vendor.email}</p>
-              </div>
-              <div className="rounded-3xl border border-white/80 bg-white/95 p-5 shadow-xl">
                 <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Address</p>
                 <p className="mt-1 text-sm font-semibold text-[var(--black)]">{vendor.address || "Not set"}</p>
               </div>
               <div className="rounded-3xl border border-white/80 bg-white/95 p-5 shadow-xl">
                 <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">WhatsApp</p>
                 <p className="mt-1 text-sm font-semibold text-[var(--black)]">{vendor.whatsapp_number || "Not set"}</p>
+              </div>
+              <div className="rounded-3xl border border-white/80 bg-white/95 p-5 shadow-xl">
+                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Date of Birth</p>
+                <p className="mt-1 text-sm font-semibold text-[var(--black)]">
+                  {vendor.dob ? fmtDateOnly(vendor.dob) : "Not set"}
+                </p>
               </div>
             </aside>
           </div>
@@ -547,4 +636,3 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
     </section>
   );
 }
-

@@ -26,9 +26,12 @@ export type VendorRow = {
   address: string;
   products: number;
   joined: string;
-  status: "Active" | "Inactive";
+  renewalDue: string;
+  renewedOn: string;
+  status: "Active" | "Inactive" | "Locked" | "Pending";
   mobile: string;
   email: string;
+  dob: string;
   whatsapp: string;
 };
 
@@ -65,7 +68,8 @@ type AdminDashboardClientProps = {
     companyName: string;
     address: string;
     whatsapp: string;
-    status: "Active" | "Inactive";
+    dob: string;
+    status: "Active" | "Inactive" | "Locked" | "Pending";
   }) => Promise<{ ok: boolean; error?: string }>;
   onDeleteVendorAction: (vendorId: string) => Promise<{ ok: boolean; error?: string }>;
   onToggleProductVisibilityAction: (input: {
@@ -101,6 +105,12 @@ function normalizeTab(input?: string): TabId {
 function statusPill(status: string) {
   if (status === "Active" || status === "Visible") {
     return "bg-emerald-50 text-emerald-700";
+  }
+  if (status === "Locked") {
+    return "bg-amber-100 text-amber-800";
+  }
+  if (status === "Pending") {
+    return "bg-sky-100 text-sky-800";
   }
   if (status === "Inactive" || status === "Hidden") {
     return "bg-red-50 text-red-700";
@@ -156,7 +166,7 @@ export default function AdminDashboardClient({
   const [selectedTab, setSelectedTab] = useState<TabId>(normalizeTab(activeTab));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [vendorSearch, setVendorSearch] = useState("");
-  const [vendorFilter, setVendorFilter] = useState<"All" | "Active" | "Inactive">("All");
+  const [vendorFilter, setVendorFilter] = useState<"All" | "Active" | "Inactive" | "Locked" | "Pending">("All");
   const [productSearch, setProductSearch] = useState("");
   const [productFilter, setProductFilter] = useState<"All" | "Visible" | "Hidden">("All");
   const [vendors, setVendors] = useState(initialVendors);
@@ -171,6 +181,9 @@ export default function AdminDashboardClient({
   const [vendorPage, setVendorPage] = useState(1);
   const [productPage, setProductPage] = useState(1);
   const [leadPage, setLeadPage] = useState(1);
+  const dobMaxDate = new Date();
+  dobMaxDate.setFullYear(dobMaxDate.getFullYear() - 18);
+  const maxDobValue = dobMaxDate.toISOString().slice(0, 10);
 
   useEffect(() => {
     setSelectedTab(normalizeTab(activeTab));
@@ -201,7 +214,9 @@ export default function AdminDashboardClient({
   }, [leads.length]);
 
   const activeVendors = vendors.filter((vendor) => vendor.status === "Active").length;
-  const inactiveVendors = vendors.length - activeVendors;
+  const inactiveVendors = vendors.filter((vendor) => vendor.status === "Inactive").length;
+  const lockedVendors = vendors.filter((vendor) => vendor.status === "Locked").length;
+  const pendingVendors = vendors.filter((vendor) => vendor.status === "Pending").length;
   const visibleProducts = products.filter((product) => !product.hidden).length;
 
   const filteredVendors = vendors.filter((vendor) => {
@@ -258,6 +273,7 @@ export default function AdminDashboardClient({
         companyName: editingVendor.name,
         address: editingVendor.address,
         whatsapp: editingVendor.whatsapp,
+        dob: editingVendor.dob,
         status: editingVendor.status,
       });
 
@@ -520,7 +536,7 @@ export default function AdminDashboardClient({
               </div>
             </div>
 
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
               <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
                 <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Total Vendors</p>
                 <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{vendors.length}</p>
@@ -536,6 +552,14 @@ export default function AdminDashboardClient({
               <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
                 <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Inactive Vendors</p>
                 <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{inactiveVendors}</p>
+              </div>
+              <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
+                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Locked Vendors</p>
+                <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{lockedVendors}</p>
+              </div>
+              <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
+                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Pending Vendors</p>
+                <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{pendingVendors}</p>
               </div>
             </div>
           </header>
@@ -559,7 +583,7 @@ export default function AdminDashboardClient({
                   <div className="rounded-2xl bg-[var(--secondary)] p-5">
                     <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Need Attention</p>
                     <p className="mt-3 text-2xl font-semibold text-[var(--black)]">
-                      {inactiveVendors + products.filter((product) => product.hidden).length}
+                      {inactiveVendors + lockedVendors + pendingVendors + products.filter((product) => product.hidden).length}
                     </p>
                   </div>
                 </div>
@@ -577,7 +601,7 @@ export default function AdminDashboardClient({
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {(["All", "Active", "Inactive"] as const).map((filter) => (
+                  {(["All", "Active", "Inactive", "Locked", "Pending"] as const).map((filter) => (
                     <button
                       key={filter}
                       type="button"
@@ -614,6 +638,8 @@ export default function AdminDashboardClient({
                       <th className="px-4 py-2 font-medium">Address</th>
                       <th className="px-4 py-2 font-medium">Products</th>
                       <th className="px-4 py-2 font-medium">Joined</th>
+                      <th className="px-4 py-2 font-medium">DOB</th>
+                      <th className="px-4 py-2 font-medium">Renewal</th>
                       <th className="px-4 py-2 font-medium">Status</th>
                       <th className="px-4 py-2 font-medium">Action</th>
                     </tr>
@@ -628,6 +654,15 @@ export default function AdminDashboardClient({
                         <td className="px-4 py-4 text-sm text-[var(--black)]">{vendor.address}</td>
                         <td className="px-4 py-4 text-sm text-[var(--black)]">{vendor.products}</td>
                         <td className="px-4 py-4 text-sm text-[var(--black)]">{vendor.joined}</td>
+                        <td className="px-4 py-4 text-sm text-[var(--black)]">{vendor.dob || "-"}</td>
+                        <td className="px-4 py-4 text-xs text-[var(--darkgray)]">
+                          <p>
+                            <span className="font-medium text-[var(--black)]">Due:</span> {vendor.renewalDue}
+                          </p>
+                          <p className="mt-1">
+                            <span className="font-medium text-[var(--black)]">Renewed:</span> {vendor.renewedOn}
+                          </p>
+                        </td>
                         <td className="px-4 py-4">
                           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusPill(vendor.status)}`}>
                             {vendor.status}
@@ -862,7 +897,7 @@ export default function AdminDashboardClient({
               <div>
                 <h3 className="text-2xl font-semibold text-[var(--black)]">Edit Vendor Profile</h3>
                 <p className="mt-1 text-sm text-[var(--darkgray)]">
-                  Mobile and email are read-only in this admin form.
+                  Mobile is read-only. You can update all other vendor fields.
                 </p>
               </div>
               <button
@@ -905,6 +940,8 @@ export default function AdminDashboardClient({
                 >
                   <option>Active</option>
                   <option>Inactive</option>
+                  <option>Locked</option>
+                  <option>Pending</option>
                 </select>
               </label>
               <label className="block md:col-span-2">
@@ -937,11 +974,13 @@ export default function AdminDashboardClient({
                 />
               </label>
               <label className="block">
-                <span className="mb-1 block text-sm font-medium text-[var(--black)]">Email</span>
+                <span className="mb-1 block text-sm font-medium text-[var(--black)]">Date of Birth</span>
                 <input
-                  value={editingVendor.email}
-                  disabled
-                  className="w-full rounded-xl border border-[var(--lightgray)] bg-[var(--secondary)] px-3 py-2.5 text-sm text-[var(--darkgray)]"
+                  type="date"
+                  value={editingVendor.dob}
+                  max={maxDobValue}
+                  onChange={(event) => updateVendorField("dob", event.target.value)}
+                  className="w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none focus:border-[var(--primary)]"
                 />
               </label>
             </div>

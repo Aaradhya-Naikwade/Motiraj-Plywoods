@@ -11,8 +11,9 @@ import {
 } from "../actions";
 import { ADMIN_AUTH_COOKIE } from "@/lib/admin-auth";
 import { findAllLeads } from "@/lib/lead-repo";
-import { findAllVendors } from "@/lib/vendor-repo";
+import { findAllVendors, setVendorStatus } from "@/lib/vendor-repo";
 import { findAllVendorProducts } from "@/lib/vendor-product-repo";
+import { getVendorRenewalDate, isVendorRenewalExpired } from "@/lib/vendor-renewal";
 import AdminDashboardClient, { LeadRow, ProductRow, VendorRow } from "./AdminDashboardClient";
 
 type AdminDashboardPageProps = {
@@ -43,6 +44,26 @@ function formatPrice(price: number | null) {
   })}`;
 }
 
+function formatDateInput(date: Date | null | undefined): string {
+  if (!date) {
+    return "";
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+function toAdminVendorStatus(status: "active" | "inactive" | "pending" | "blocked" | "locked"): VendorRow["status"] {
+  if (status === "active") {
+    return "Active";
+  }
+  if (status === "locked") {
+    return "Locked";
+  }
+  if (status === "pending") {
+    return "Pending";
+  }
+  return "Inactive";
+}
+
 export default async function AdminDashboardPage({ searchParams }: AdminDashboardPageProps) {
   const cookieStore = await cookies();
   if (!cookieStore.get(ADMIN_AUTH_COOKIE)) {
@@ -56,6 +77,15 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
     findAllLeads(),
   ]);
 
+  await Promise.all(
+    vendors.map(async (vendor) => {
+      if (vendor.status === "active" && isVendorRenewalExpired(vendor)) {
+        await setVendorStatus(vendor._id.toString(), "locked");
+        vendor.status = "locked";
+      }
+    })
+  );
+
   const productCountByVendorId = new Map<string, number>();
   for (const product of products) {
     const key = product.vendor_id.toString();
@@ -64,18 +94,29 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
 
   const vendorNameById = new Map(vendors.map((vendor) => [vendor._id.toString(), vendor.company_name]));
 
-  const initialVendors: VendorRow[] = vendors.map((vendor) => ({
-    id: vendor._id.toString(),
-    name: vendor.company_name,
-    owner: vendor.name,
-    address: vendor.address ?? "-",
-    products: productCountByVendorId.get(vendor._id.toString()) ?? 0,
-    joined: formatDate(vendor.created_at),
-    status: vendor.status === "active" ? "Active" : "Inactive",
-    mobile: vendor.mobile,
-    email: vendor.email,
-    whatsapp: vendor.whatsapp_number ?? "",
-  }));
+  const initialVendors: VendorRow[] = vendors.map((vendor) => {
+    const renewedOn =
+      vendor.renewal_started_at &&
+      vendor.renewal_started_at.getTime() !== vendor.created_at.getTime()
+        ? formatDate(vendor.renewal_started_at)
+        : "-";
+
+    return {
+      id: vendor._id.toString(),
+      name: vendor.company_name,
+      owner: vendor.name,
+      address: vendor.address ?? "-",
+      products: productCountByVendorId.get(vendor._id.toString()) ?? 0,
+      joined: formatDate(vendor.created_at),
+      renewalDue: formatDate(getVendorRenewalDate(vendor)),
+      renewedOn,
+      status: toAdminVendorStatus(vendor.status),
+      mobile: vendor.mobile,
+      email: vendor.email,
+      dob: formatDateInput(vendor.dob),
+      whatsapp: vendor.whatsapp_number ?? "",
+    };
+  });
 
   const initialProducts: ProductRow[] = products.map((product) => ({
     id: product._id.toString(),

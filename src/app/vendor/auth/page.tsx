@@ -1,11 +1,14 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { VENDOR_AUTH_COOKIE, normalizeMobile } from "@/lib/vendor-auth";
+import { findVendorById, setVendorStatus } from "@/lib/vendor-repo";
+import { isVendorRenewalExpired } from "@/lib/vendor-renewal";
+import { VENDOR_AUTH_COOKIE, normalizeMobile, verifyVendorSessionToken } from "@/lib/vendor-auth";
 import { vendorLoginAction, vendorRegisterAction } from "../actions";
 import PasswordField from "@/components/PasswordField";
+import RenewalPopup from "@/components/vendor/RenewalPopup";
 
 type VendorAuthPageProps = {
-  searchParams: Promise<{ tab?: string; error?: string; mobile?: string; email?: string }>;
+  searchParams: Promise<{ tab?: string; error?: string; mobile?: string }>;
 };
 
 function getVendorErrorMessage(error?: string): string | null {
@@ -24,14 +27,18 @@ function getVendorErrorMessage(error?: string): string | null {
       return "Your vendor account is inactive. Please contact support.";
     case "account_pending":
       return "Your vendor account is pending approval.";
+    case "renewal_required":
+      return "You have completed one year with us. To renew your ID, please contact us.";
     case "missing_fields":
-      return "Please fill in all required fields and accept terms.";
+      return "Please fill in all required fields and confirm the renewal checkbox.";
     case "invalid_email":
       return "Please enter a valid email address.";
     case "weak_password":
       return "Password must be at least 8 characters long.";
     case "password_mismatch":
       return "Password and confirm password do not match.";
+    case "underage":
+      return "Vendor age must be 18 years or older.";
     case "mobile_exists":
       return "Mobile number is already registered. Please login.";
     case "email_exists":
@@ -43,15 +50,31 @@ function getVendorErrorMessage(error?: string): string | null {
 
 export default async function VendorAuthPage({ searchParams }: VendorAuthPageProps) {
   const cookieStore = await cookies();
-  if (cookieStore.get(VENDOR_AUTH_COOKIE)) {
-    redirect("/vendor/dashboard");
+  const sessionCookie = cookieStore.get(VENDOR_AUTH_COOKIE)?.value;
+  if (sessionCookie) {
+    const session = verifyVendorSessionToken(sessionCookie);
+    if (session) {
+      const vendor = await findVendorById(session.sub);
+      if (vendor && vendor.status === "pending") {
+        redirect("/vendor/dashboard");
+      }
+      if (vendor && vendor.status === "active" && !isVendorRenewalExpired(vendor)) {
+        redirect("/vendor/dashboard");
+      }
+      if (vendor && isVendorRenewalExpired(vendor) && vendor.status === "active") {
+        await setVendorStatus(vendor._id.toString(), "locked");
+      }
+    }
   }
 
   const params = await searchParams;
   const activeTab = params.tab === "register" ? "register" : "login";
+  const isRenewalRequired = params.error === "renewal_required";
   const error = getVendorErrorMessage(params.error);
   const mobileValue = params.mobile ? normalizeMobile(params.mobile) : "";
-  const emailValue = params.email ?? "";
+  const dobMaxDate = new Date();
+  dobMaxDate.setFullYear(dobMaxDate.getFullYear() - 18);
+  const maxDobValue = dobMaxDate.toISOString().slice(0, 10);
 
   return (
     <section className="min-h-screen bg-[var(--secondary)] px-4 py-10 md:px-8 md:py-14">
@@ -169,13 +192,12 @@ export default async function VendorAuthPage({ searchParams }: VendorAuthPagePro
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-[var(--black)]">Email Address *</span>
+              <span className="mb-1 block text-sm font-medium text-[var(--black)]">Date of Birth *</span>
               <input
-                name="email"
-                type="email"
+                name="dob"
+                type="date"
                 required
-                defaultValue={emailValue}
-                placeholder="you@company.com"
+                max={maxDobValue}
                 className="w-full rounded-lg border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)]"
               />
             </label>
@@ -218,7 +240,7 @@ export default async function VendorAuthPage({ searchParams }: VendorAuthPagePro
                 className="mt-1 h-4 w-4 accent-[var(--primary)]"
               />
               <span className="text-sm text-[var(--darkgray)]">
-                I agree to the Terms & Conditions and privacy policy.
+                This ID needs renewal every year, stay connected with Ratlami Interio regularly.
               </span>
             </label>
 
@@ -231,6 +253,8 @@ export default async function VendorAuthPage({ searchParams }: VendorAuthPagePro
           </form>
         )}
       </div>
+
+      {isRenewalRequired ? <RenewalPopup initialOpen /> : null}
     </section>
   );
 }

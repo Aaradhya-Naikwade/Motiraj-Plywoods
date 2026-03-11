@@ -5,9 +5,10 @@ import { redirect } from "next/navigation";
 import { MongoServerError } from "mongodb";
 import { createHash } from "crypto";
 import { VENDOR_AUTH_COOKIE, VENDOR_SESSION_TTL_SECONDS, createVendorSessionToken, hashPassword, isStrongPassword, isValidMobile, normalizeMobile, verifyPassword, verifyVendorSessionToken } from "@/lib/vendor-auth";
-import { createVendor, findVendorById, findVendorByMobile, updateVendorLastLogin, updateVendorProfile } from "@/lib/vendor-repo";
+import { createVendor, findVendorById, findVendorByMobile, setVendorStatus, updateVendorLastLogin, updateVendorProfile } from "@/lib/vendor-repo";
 import { createVendorProduct, deleteVendorProduct, findVendorProductById, updateVendorProduct } from "@/lib/vendor-product-repo";
 import { removeUploadedImages } from "@/lib/vendor-product-images";
+import { isVendorRenewalExpired } from "@/lib/vendor-renewal";
 
 function buildRedirect(path: string, params: Record<string, string | undefined>) {
   const search = new URLSearchParams();
@@ -20,8 +21,42 @@ function buildRedirect(path: string, params: Record<string, string | undefined>)
   return query ? `${path}?${query}` : path;
 }
 
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+function parseDobInput(input: string): Date | null {
+  const value = input.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const [year, month, day] = value.split("-").map((part) => Number(part));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const isSameDate =
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day;
+  if (!isSameDate) {
+    return null;
+  }
+
+  const today = new Date();
+  const todayUtc = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  if (date > todayUtc) {
+    return null;
+  }
+
+  return date;
+}
+
+function isAtLeast18YearsOld(dob: Date): boolean {
+  const today = new Date();
+  let age = today.getUTCFullYear() - dob.getUTCFullYear();
+  const monthDelta = today.getUTCMonth() - dob.getUTCMonth();
+  const dayDelta = today.getUTCDate() - dob.getUTCDate();
+
+  if (monthDelta < 0 || (monthDelta === 0 && dayDelta < 0)) {
+    age -= 1;
+  }
+
+  return age >= 18;
 }
 
 async function setVendorAuthCookie(vendorId: string, mobile: string) {
@@ -34,6 +69,11 @@ async function setVendorAuthCookie(vendorId: string, mobile: string) {
     path: "/",
     maxAge: VENDOR_SESSION_TTL_SECONDS,
   });
+}
+
+async function clearVendorAuthCookie() {
+  const cookieStore = await cookies();
+  cookieStore.delete(VENDOR_AUTH_COOKIE);
 }
 
 async function getAuthenticatedVendorOrRedirect() {
@@ -52,6 +92,26 @@ async function getAuthenticatedVendorOrRedirect() {
   const vendor = await findVendorById(session.sub);
   if (!vendor) {
     redirect("/vendor/auth");
+  }
+
+  if (vendor.status === "locked") {
+    await clearVendorAuthCookie();
+    redirect("/vendor/auth?tab=login&error=renewal_required");
+  }
+
+  if (vendor.status === "pending") {
+    redirect("/vendor/dashboard?error=account_pending");
+  }
+
+  if (vendor.status !== "active") {
+    await clearVendorAuthCookie();
+    redirect("/vendor/auth?tab=login&error=account_inactive");
+  }
+
+  if (isVendorRenewalExpired(vendor)) {
+    await setVendorStatus(vendor._id.toString(), "locked");
+    await clearVendorAuthCookie();
+    redirect("/vendor/auth?tab=login&error=renewal_required");
   }
 
   return vendor;
@@ -185,7 +245,18 @@ export async function vendorLoginAction(formData: FormData) {
   }
 
   if (existingVendor.status === "pending") {
-    redirect(buildRedirect("/vendor/auth", { tab: "login", error: "account_pending", mobile }));
+    await setVendorAuthCookie(existingVendor._id.toString(), existingVendor.mobile);
+    redirect("/vendor/dashboard?error=account_pending");
+  }
+
+  if (existingVendor.status === "locked") {
+    redirect(buildRedirect("/vendor/auth", { tab: "login", error: "renewal_required", mobile }));
+  }
+
+  if (isVendorRenewalExpired(existingVendor)) {
+    await setVendorStatus(existingVendor._id.toString(), "locked");
+    await clearVendorAuthCookie();
+    redirect(buildRedirect("/vendor/auth", { tab: "login", error: "renewal_required", mobile }));
   }
 
   const isValidPassword = verifyPassword(
@@ -208,7 +279,8 @@ export async function vendorRegisterAction(formData: FormData) {
   const companyName = String(formData.get("companyName") ?? "").trim();
   const address = String(formData.get("address") ?? "").trim();
   const mobile = normalizeMobile(String(formData.get("mobile") ?? ""));
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const dobInput = String(formData.get("dob") ?? "");
+  const dob = parseDobInput(dobInput);
   const password = String(formData.get("password") ?? "");
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
   const termsAccepted = String(formData.get("terms") ?? "") === "on";
@@ -217,12 +289,12 @@ export async function vendorRegisterAction(formData: FormData) {
     redirect(buildRedirect("/vendor/auth", { tab: "register", error: "invalid_mobile_register", mobile }));
   }
 
-  if (!name || !companyName || !email || !termsAccepted) {
-    redirect(buildRedirect("/vendor/auth", { tab: "register", error: "missing_fields", mobile, email }));
+  if (!name || !companyName || !termsAccepted || !dob) {
+    redirect(buildRedirect("/vendor/auth", { tab: "register", error: "missing_fields", mobile }));
   }
 
-  if (!isValidEmail(email)) {
-    redirect(buildRedirect("/vendor/auth", { tab: "register", error: "invalid_email", mobile, email }));
+  if (!isAtLeast18YearsOld(dob)) {
+    redirect(buildRedirect("/vendor/auth", { tab: "register", error: "underage", mobile }));
   }
 
   if (!isStrongPassword(password)) {
@@ -230,15 +302,16 @@ export async function vendorRegisterAction(formData: FormData) {
   }
 
   if (password !== confirmPassword) {
-    redirect(buildRedirect("/vendor/auth", { tab: "register", error: "password_mismatch", mobile, email }));
+    redirect(buildRedirect("/vendor/auth", { tab: "register", error: "password_mismatch", mobile }));
   }
 
   const mobileExists = await findVendorByMobile(mobile);
   if (mobileExists) {
-    redirect(buildRedirect("/vendor/auth", { tab: "register", error: "mobile_exists", mobile, email }));
+    redirect(buildRedirect("/vendor/auth", { tab: "register", error: "mobile_exists", mobile }));
   }
 
   const { hash, salt } = hashPassword(password);
+  const generatedEmail = `${mobile}@vendor.ratlamiinterio.local`;
 
   try {
     const vendor = await createVendor({
@@ -246,10 +319,11 @@ export async function vendorRegisterAction(formData: FormData) {
       company_name: companyName,
       address: address || null,
       mobile,
-      email,
+      email: generatedEmail,
+      dob,
       password_hash: hash,
       password_salt: salt,
-      status: "active",
+      status: "pending",
     });
 
     await updateVendorLastLogin(vendor._id.toString());
@@ -259,9 +333,9 @@ export async function vendorRegisterAction(formData: FormData) {
     if (error instanceof MongoServerError && error.code === 11000) {
       const duplicateField = Object.keys(error.keyPattern ?? {})[0];
       if (duplicateField === "email") {
-        redirect(buildRedirect("/vendor/auth", { tab: "register", error: "email_exists", mobile, email }));
+        redirect(buildRedirect("/vendor/auth", { tab: "register", error: "email_exists", mobile }));
       }
-      redirect(buildRedirect("/vendor/auth", { tab: "register", error: "mobile_exists", mobile, email }));
+      redirect(buildRedirect("/vendor/auth", { tab: "register", error: "mobile_exists", mobile }));
     }
     throw error;
   }
@@ -279,11 +353,17 @@ export async function vendorUpdateProfileAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const companyName = String(formData.get("companyName") ?? "").trim();
   const address = String(formData.get("address") ?? "").trim();
+  const dobInput = String(formData.get("dob") ?? "");
+  const dob = parseDobInput(dobInput);
   const whatsappRaw = String(formData.get("whatsappNumber") ?? "").trim();
   const whatsappNumber = whatsappRaw ? normalizeMobile(whatsappRaw) : "";
 
-  if (!name || !companyName) {
+  if (!name || !companyName || !dob) {
     redirect("/vendor/dashboard?error=missing_fields");
+  }
+
+  if (!isAtLeast18YearsOld(dob)) {
+    redirect("/vendor/dashboard?error=underage");
   }
 
   if (whatsappNumber && !isValidMobile(whatsappNumber)) {
@@ -295,6 +375,8 @@ export async function vendorUpdateProfileAction(formData: FormData) {
     company_name: companyName,
     address: address || null,
     whatsapp_number: whatsappNumber || null,
+    email: vendor.email,
+    dob,
   });
 
   redirect("/vendor/dashboard?status=profile_updated");

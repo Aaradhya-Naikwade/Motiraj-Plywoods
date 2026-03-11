@@ -1,7 +1,7 @@
 import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/mongodb";
 
-export type VendorStatus = "active" | "inactive" | "pending" | "blocked";
+export type VendorStatus = "active" | "inactive" | "pending" | "blocked" | "locked";
 
 export type VendorDocument = {
   _id: ObjectId;
@@ -11,10 +11,12 @@ export type VendorDocument = {
   mobile: string;
   whatsapp_number: string | null;
   email: string;
+  dob: Date | null;
   password_hash: string;
   password_salt: string;
   status: VendorStatus;
   created_at: Date;
+  renewal_started_at: Date | null;
   last_login: Date | null;
 };
 
@@ -25,6 +27,7 @@ type CreateVendorInput = {
   mobile: string;
   whatsapp_number?: string | null;
   email: string;
+  dob?: Date | null;
   password_hash: string;
   password_salt: string;
   status?: VendorStatus;
@@ -102,6 +105,15 @@ export async function findVendorByMobile(mobile: string): Promise<VendorDocument
   return doc as VendorDocument;
 }
 
+export async function findVendorByEmail(email: string): Promise<VendorDocument | null> {
+  const collection = await getVendorCollection();
+  const doc = await collection.findOne({ email });
+  if (!doc?._id) {
+    return null;
+  }
+  return doc as VendorDocument;
+}
+
 export async function findVendorById(id: string): Promise<VendorDocument | null> {
   if (!ObjectId.isValid(id)) {
     return null;
@@ -142,8 +154,10 @@ export async function createVendor(input: CreateVendorInput): Promise<VendorDocu
     ...input,
     address: input.address ?? null,
     whatsapp_number: input.whatsapp_number ?? null,
+    dob: input.dob ?? null,
     status: input.status ?? "active",
     created_at: now,
+    renewal_started_at: now,
     last_login: null,
   };
 
@@ -161,7 +175,14 @@ export async function updateVendorLastLogin(vendorId: string, at = new Date()): 
 
 export async function updateVendorProfile(
   vendorId: string,
-  profile: { name: string; company_name: string; address: string | null; whatsapp_number: string | null }
+  profile: {
+    name: string;
+    company_name: string;
+    address: string | null;
+    whatsapp_number: string | null;
+    email: string;
+    dob: Date | null;
+  }
 ): Promise<void> {
   if (!ObjectId.isValid(vendorId)) {
     return;
@@ -176,6 +197,8 @@ export async function updateVendorProfile(
         company_name: profile.company_name,
         address: profile.address,
         whatsapp_number: profile.whatsapp_number,
+        email: profile.email,
+        dob: profile.dob,
       },
     }
   );
@@ -188,9 +211,44 @@ export async function adminUpdateVendor(
     company_name: string;
     address: string | null;
     whatsapp_number: string | null;
-    status: Extract<VendorStatus, "active" | "inactive">;
+    email: string;
+    dob: Date | null;
+    status: Extract<VendorStatus, "active" | "inactive" | "locked" | "pending">;
   }
 ): Promise<boolean> {
+  if (!ObjectId.isValid(vendorId)) {
+    return false;
+  }
+
+  const collection = await getVendorCollection();
+  const existingVendor = await collection.findOne({ _id: new ObjectId(vendorId) });
+  if (!existingVendor?._id) {
+    return false;
+  }
+
+  const shouldResetRenewalWindow =
+    existingVendor.status === "locked" && profile.status === "active";
+
+  const result = await collection.updateOne(
+    { _id: new ObjectId(vendorId) },
+    {
+      $set: {
+        name: profile.name,
+        company_name: profile.company_name,
+        address: profile.address,
+        whatsapp_number: profile.whatsapp_number,
+        email: profile.email,
+        dob: profile.dob,
+        status: profile.status,
+        ...(shouldResetRenewalWindow ? { renewal_started_at: new Date() } : {}),
+      },
+    }
+  );
+
+  return result.matchedCount > 0;
+}
+
+export async function setVendorStatus(vendorId: string, status: VendorStatus): Promise<boolean> {
   if (!ObjectId.isValid(vendorId)) {
     return false;
   }
@@ -200,11 +258,7 @@ export async function adminUpdateVendor(
     { _id: new ObjectId(vendorId) },
     {
       $set: {
-        name: profile.name,
-        company_name: profile.company_name,
-        address: profile.address,
-        whatsapp_number: profile.whatsapp_number,
-        status: profile.status,
+        status,
       },
     }
   );

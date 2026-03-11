@@ -6,6 +6,9 @@ import Footer from "@/components/Footer";
 import VendorFloatingButton from "@/components/VendorFloatingButton";
 import AppToaster from "@/components/AppToaster";
 import { VENDOR_AUTH_COOKIE } from "@/lib/auth-cookies";
+import { verifyVendorSessionToken } from "@/lib/vendor-auth";
+import { findVendorById } from "@/lib/vendor-repo";
+import { isVendorRenewalExpired } from "@/lib/vendor-renewal";
 
 export const metadata: Metadata = {
   title: "Ratlami Interio",
@@ -18,7 +21,20 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
-  const isVendorLoggedIn = Boolean(cookieStore.get(VENDOR_AUTH_COOKIE)?.value);
+  const sessionCookie = cookieStore.get(VENDOR_AUTH_COOKIE)?.value;
+  let isVendorLoggedIn = false;
+
+  if (sessionCookie) {
+    const session = verifyVendorSessionToken(sessionCookie);
+    if (session) {
+      const vendor = await findVendorById(session.sub);
+      isVendorLoggedIn = Boolean(
+        vendor &&
+        ((vendor.status === "active" && !isVendorRenewalExpired(vendor)) ||
+          vendor.status === "pending")
+      );
+    }
+  }
 
   return (
     <html lang="en">

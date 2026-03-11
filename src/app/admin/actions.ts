@@ -5,13 +5,51 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ADMIN_AUTH_COOKIE, isValidAdminCredentials } from "@/lib/admin-auth";
 import { deleteLead, updateLead } from "@/lib/lead-repo";
-import { adminUpdateVendor, deleteVendorById } from "@/lib/vendor-repo";
+import { adminUpdateVendor, deleteVendorById, findVendorById } from "@/lib/vendor-repo";
 import {
   adminDeleteVendorProduct,
   adminSetVendorProductHidden,
   deleteVendorProductsByVendorId,
 } from "@/lib/vendor-product-repo";
 import { removeUploadedImages } from "@/lib/vendor-product-images";
+
+function parseDobInput(input: string): Date | null {
+  const value = input.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const [year, month, day] = value.split("-").map((part) => Number(part));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const isSameDate =
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day;
+  if (!isSameDate) {
+    return null;
+  }
+
+  const today = new Date();
+  const todayUtc = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  if (date > todayUtc) {
+    return null;
+  }
+
+  return date;
+}
+
+function isAtLeast18YearsOld(dob: Date): boolean {
+  const today = new Date();
+  let age = today.getUTCFullYear() - dob.getUTCFullYear();
+  const monthDelta = today.getUTCMonth() - dob.getUTCMonth();
+  const dayDelta = today.getUTCDate() - dob.getUTCDate();
+
+  if (monthDelta < 0 || (monthDelta === 0 && dayDelta < 0)) {
+    age -= 1;
+  }
+
+  return age >= 18;
+}
 
 export async function adminLoginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "");
@@ -52,16 +90,41 @@ export async function adminUpdateVendorAction(input: {
   companyName: string;
   address: string;
   whatsapp: string;
-  status: "Active" | "Inactive";
+  dob: string;
+  status: "Active" | "Inactive" | "Locked" | "Pending";
 }) {
   await requireAdminSession();
+  const dob = parseDobInput(input.dob);
 
-  const updated = await adminUpdateVendor(input.vendorId, {
+  if (!dob) {
+    return { ok: false, error: "Please enter a valid date of birth." };
+  }
+
+  if (!isAtLeast18YearsOld(dob)) {
+    return { ok: false, error: "Vendor age must be 18 years or older." };
+  }
+
+  const existingVendor = await findVendorById(input.vendorId);
+  if (!existingVendor) {
+    return { ok: false, error: "Vendor not found." };
+  }
+
+  let updated = false;
+  updated = await adminUpdateVendor(input.vendorId, {
     name: input.name.trim(),
     company_name: input.companyName.trim(),
     address: input.address.trim() || null,
     whatsapp_number: input.whatsapp.trim() || null,
-    status: input.status === "Active" ? "active" : "inactive",
+    email: existingVendor.email,
+    dob,
+    status:
+      input.status === "Active"
+        ? "active"
+        : input.status === "Locked"
+          ? "locked"
+          : input.status === "Pending"
+            ? "pending"
+            : "inactive",
   });
 
   if (!updated) {

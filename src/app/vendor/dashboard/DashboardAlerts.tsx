@@ -41,13 +41,37 @@ export default function DashboardAlerts({ status, error }: DashboardAlertsProps)
     }
 
     if (error === "missing_fields") {
-      toast.error("Name and company name are required.");
+      toast.error("Name, company name, and date of birth are required.");
       shownRef.current = true;
       return;
     }
 
     if (error === "invalid_whatsapp") {
       toast.error("Enter a valid WhatsApp number (10 to 15 digits).");
+      shownRef.current = true;
+      return;
+    }
+
+    if (error === "invalid_email") {
+      toast.error("Please enter a valid email address.");
+      shownRef.current = true;
+      return;
+    }
+
+    if (error === "email_exists") {
+      toast.error("This email is already used by another vendor.");
+      shownRef.current = true;
+      return;
+    }
+
+    if (error === "underage") {
+      toast.error("Vendor age must be 18 years or older.");
+      shownRef.current = true;
+      return;
+    }
+
+    if (error === "account_pending") {
+      toast.info("Your account is pending admin approval. Features are currently disabled.");
       shownRef.current = true;
       return;
     }

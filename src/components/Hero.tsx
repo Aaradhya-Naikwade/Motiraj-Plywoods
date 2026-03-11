@@ -1,118 +1,7 @@
-// "use client";
-// import React, { useState } from "react";
-
-// const Hero = () => {
-  
-//   const [activeTab, setActiveTab] = useState<string | null>(null);
-
-//   const menuData: Record<string, string[]> = {
-//     Gallery: [
-//       "Bad In Cabineta",
-//       "Door",
-//       "Decoratives N Temple",
-//       "Exteriors",
-//       "Kitchen",
-//       "Sofa",
-//       "Partition In Panels",
-//       "Shop N Office",
-//     ],
-//     Products: ["Plywood", "Flush Doors", "Block Boards"],
-//     Decorative: ["Veneers", "Wall Panels", "Highlighters"],
-//     Laminates: ["Sunmica", "PVC Laminates", "Acrylic Sheets"],
-//     Hardware: ["Handles", "Locks", "Hinges", "Channels"],
-//   };
-
-//   const navItems = ["Gallery", "Products", "Decorative", "Laminates", "Hardware"];
-
-//   const toggleTab = (item: string) => {
-//     setActiveTab((prev) => (prev === item ? null : item));
-//   };
-
-//   return (
-//     <section className="relative w-full">
-
-//       {/* ================= NAVBAR ================= */}
-//       <nav className="flex flex-wrap md:flex-nowrap w-full border-t border-b border-gray-300 bg-[var(--secondary)] relative z-30">
-
-//         {navItems.map((item) => (
-//           <div
-//             key={item}
-//             className="relative flex-1 min-w-[50%] md:min-w-0 border-r border-gray-300 last:border-r-0"
-//           >
-//             {/* NAV BUTTON */}
-//             <button
-//               onClick={() => toggleTab(item)}
-//               className={`w-full py-3 md:py-4 text-sm md:text-lg font-medium capitalize transition-all
-//               ${
-//                 activeTab === item
-//                   ? "bg-[var(--darkb)] text-white"
-//                   : "text-black hover:bg-black/5"
-//               }`}
-//             >
-//               {item}
-//             </button>
-
-//             {/* DROPDOWN */}
-//             <div
-//               className={`
-//               absolute left-0 top-full w-full z-40 overflow-hidden
-//               transition-all duration-300 ease-in-out
-//               ${
-//                 activeTab === item
-//                   ? "max-h-[400px] opacity-100"
-//                   : "max-h-0 opacity-0 pointer-events-none"
-//               }
-//               `}
-//               style={{
-//                 backgroundColor: "var(--primary)",
-//                 backdropFilter: "blur(8px)",
-//               }}
-//             >
-//               <ul className="flex flex-col py-4">
-//                 {menuData[item].map((subItem) => (
-//                   <li
-//                     key={subItem}
-//                     className="px-5 md:px-6 py-2 text-sm md:text-base text-black
-//                     hover:bg-white/10 cursor-pointer transition"
-//                   >
-//                     {subItem}
-//                   </li>
-//                 ))}
-//               </ul>
-//             </div>
-//           </div>
-//         ))}
-//       </nav>
-
-//       {/* ================= HERO IMAGE ================= */}
-//       <div className="relative w-full overflow-hidden leading-[0]">
-//         <img
-//           src="/image/hero.png"
-//           alt="Hero Banner"
-//           className="w-full h-auto object-contain"
-//         />
-
-//         {/* bottom color strip */}
-//         <div className="w-full flex h-2 md:h-3">
-//           <div className="flex-[1.5] bg-[var(--primary)]"></div>
-//           <div className="flex-1 bg-[#a38a6a]"></div>
-//           <div className="flex-1 bg-[#d6c1a5]"></div>
-//         </div>
-//       </div>
-//     </section>
-//   );
-// };
-
-// export default Hero;
-
-
-
-
 "use client";
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Video } from "lucide-react";
 
 const Hero = () => {
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -120,15 +9,18 @@ const Hero = () => {
 
   const menuData: Record<string, string[]> = {
     Gallery: [
-      "Bad In Cabineta",
-      "Door",
+      "Bed n Cabinets",
       "Decoratives N Temple",
+      "Door",
       "Exteriors",
+      "Furnishing",
       "Kitchen",
-      "Sofa",
+      "LED",
       "Partition In Panels",
-      "Shop N Office",
+      "Shop n Office",
+      "Sofa",
     ],
+    
     Products: ["Plywood", "Flush Doors", "Block Boards"],
     Decorative: ["Veneers", "Wall Panels", "Highlighters"],
     Laminates: ["Sunmica", "PVC Laminates", "Acrylic Sheets"],
@@ -166,12 +58,12 @@ const Hero = () => {
 
             <div
               className={`
-              absolute left-0 top-full w-full z-40 overflow-hidden
+              absolute left-0 top-full w-full z-40
               transition-all duration-300 ease-in-out
               ${
                 activeTab === item
-                  ? "max-h-[400px] opacity-100"
-                  : "max-h-0 opacity-0 pointer-events-none"
+                  ? "max-h-[70vh] overflow-y-auto opacity-100"
+                  : "max-h-0 overflow-hidden opacity-0 pointer-events-none"
               }
               `}
               style={{
