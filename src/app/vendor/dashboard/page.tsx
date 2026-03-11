@@ -14,9 +14,11 @@ import {
 } from "../actions";
 import DashboardAlerts from "./DashboardAlerts";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
+import { Building2, CalendarDays, MapPin, Phone, User } from "lucide-react";
+import { FaWhatsapp } from "react-icons/fa";
 
 type VendorDashboardPageProps = {
-  searchParams: Promise<{ status?: string; error?: string; tab?: string; page?: string; edit?: string }>;
+  searchParams: Promise<{ status?: string; error?: string; tab?: string; page?: string; edit?: string; mode?: string }>;
 };
 
 const PRODUCTS_PER_PAGE = 6;
@@ -122,6 +124,7 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
   const products = await findVendorProductsByVendorId(vendor._id.toString());
   const params = await searchParams;
   const activeTab = params.tab === "products" ? "products" : "profile";
+  const isProfileEditMode = activeTab === "profile" && params.mode === "edit";
   const totalPages = Math.max(1, Math.ceil(products.length / PRODUCTS_PER_PAGE));
   const requestedPage = Number(params.page ?? "1");
   const currentPage = Number.isFinite(requestedPage)
@@ -132,6 +135,8 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
   const selectedProduct = products.find((product) => product._id.toString() === params.edit) ?? null;
   const buildProductsUrl = (page: number, editId?: string) =>
     `/vendor/dashboard?tab=products&page=${page}${editId ? `&edit=${editId}` : ""}`;
+  const profileViewUrl = "/vendor/dashboard?tab=profile";
+  const profileEditUrl = "/vendor/dashboard?tab=profile&mode=edit";
   const vendorDobValue = vendor.dob ? vendor.dob.toISOString().slice(0, 10) : "";
   const dobMaxDate = new Date();
   dobMaxDate.setFullYear(dobMaxDate.getFullYear() - 18);
@@ -206,100 +211,151 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
         </div>
 
         {activeTab === "profile" ? (
-          <div className="grid gap-6 lg:grid-cols-5">
-            <div className="rounded-3xl border border-white/80 bg-white/95 p-6 shadow-xl lg:col-span-3">
-              <h2 className="text-xl font-semibold text-[var(--black)]">Business Profile</h2>
-              <p className="mt-1 text-sm text-[var(--darkgray)]">Keep your contact details updated for buyers.</p>
-
-              <form action={vendorUpdateProfileAction} className="mt-6 grid gap-4 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-[var(--black)]">Name</span>
-                  <input
-                    name="name"
-                    type="text"
-                    required
-                    defaultValue={vendor.name}
-                    className="w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-[var(--black)]">Company Name</span>
-                  <input
-                    name="companyName"
-                    type="text"
-                    required
-                    defaultValue={vendor.company_name}
-                    className="w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
-                  />
-                </label>
-
-                <label className="block md:col-span-2">
-                  <span className="mb-1 block text-sm font-medium text-[var(--black)]">Business Address</span>
-                  <textarea
-                    name="address"
-                    rows={3}
-                    defaultValue={vendor.address ?? ""}
-                    placeholder="Full shop/office address"
-                    className="w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
-                  />
-                </label>
-
-                <label className="block md:col-span-2">
-                  <span className="mb-1 block text-sm font-medium text-[var(--black)]">WhatsApp Number</span>
-                  <input
-                    name="whatsappNumber"
-                    type="tel"
-                    inputMode="numeric"
-                    defaultValue={vendor.whatsapp_number ?? ""}
-                    placeholder="e.g. 919876543210"
-                    className="w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-[var(--black)]">Date of Birth</span>
-                  <input
-                    name="dob"
-                    type="date"
-                    required
-                    defaultValue={vendorDobValue}
-                    max={maxDobValue}
-                    className="w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
-                  />
-                </label>
-
-                <div className="md:col-span-2">
-                  <button
-                    type="submit"
-                    className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90 md:w-auto md:px-8"
-                  >
-                    Save Profile
-                  </button>
-                </div>
-              </form>
+          <div className="rounded-3xl border border-white/80 bg-white/95 p-6 shadow-xl">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold text-[var(--black)]">Business Profile</h2>
+                <p className="mt-1 text-sm text-[var(--darkgray)]">Keep your contact details updated for buyers.</p>
+              </div>
             </div>
 
-            <aside className="space-y-4 lg:col-span-2">
-              <div className="rounded-3xl border border-white/80 bg-white/95 p-5 shadow-xl">
-                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Mobile</p>
-                <p className="mt-1 text-sm font-semibold text-[var(--black)]">{vendor.mobile}</p>
+            <form action={vendorUpdateProfileAction} className="mt-6 grid gap-4 md:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 flex items-center gap-2 text-sm font-medium text-[var(--black)]">
+                  <User size={15} />
+                  Name
+                </span>
+                <input
+                  name="name"
+                  type="text"
+                  required
+                  defaultValue={vendor.name}
+                  disabled={!isProfileEditMode}
+                  className={`w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none transition ${
+                    isProfileEditMode
+                      ? "bg-white focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
+                      : "bg-[var(--secondary)]/60 text-[var(--darkgray)]"
+                  }`}
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 flex items-center gap-2 text-sm font-medium text-[var(--black)]">
+                  <Building2 size={15} />
+                  Company Name
+                </span>
+                <input
+                  name="companyName"
+                  type="text"
+                  required
+                  defaultValue={vendor.company_name}
+                  disabled={!isProfileEditMode}
+                  className={`w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none transition ${
+                    isProfileEditMode
+                      ? "bg-white focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
+                      : "bg-[var(--secondary)]/60 text-[var(--darkgray)]"
+                  }`}
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 flex items-center gap-2 text-sm font-medium text-[var(--black)]">
+                  <Phone size={15} />
+                  Mobile (Read-only)
+                </span>
+                <input
+                  type="text"
+                  value={vendor.mobile}
+                  disabled
+                  className="w-full rounded-xl border border-[var(--lightgray)] bg-[var(--secondary)]/60 px-3 py-2.5 text-sm text-[var(--darkgray)]"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 flex items-center gap-2 text-sm font-medium text-[var(--black)]">
+                  <CalendarDays size={15} />
+                  Date of Birth
+                </span>
+                <input
+                  name="dob"
+                  type="date"
+                  required
+                  defaultValue={vendorDobValue}
+                  disabled={!isProfileEditMode}
+                  max={maxDobValue}
+                  className={`w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none transition ${
+                    isProfileEditMode
+                      ? "bg-white focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
+                      : "bg-[var(--secondary)]/60 text-[var(--darkgray)]"
+                  }`}
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 flex items-center gap-2 text-sm font-medium text-[var(--black)]">
+                  <MapPin size={15} />
+                  Business Address
+                </span>
+                <textarea
+                  name="address"
+                  rows={3}
+                  defaultValue={vendor.address ?? ""}
+                  disabled={!isProfileEditMode}
+                  placeholder="Full shop/office address"
+                  className={`w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none transition ${
+                    isProfileEditMode
+                      ? "bg-white focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
+                      : "bg-[var(--secondary)]/60 text-[var(--darkgray)]"
+                  }`}
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 flex items-center gap-2 text-sm font-medium text-[var(--black)]">
+                  <FaWhatsapp size={15} />
+                  WhatsApp Number
+                </span>
+                <input
+                  name="whatsappNumber"
+                  type="tel"
+                  inputMode="numeric"
+                  defaultValue={vendor.whatsapp_number ?? ""}
+                  disabled={!isProfileEditMode}
+                  placeholder="e.g. 919876543210"
+                  className={`w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none transition ${
+                    isProfileEditMode
+                      ? "bg-white focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
+                      : "bg-[var(--secondary)]/60 text-[var(--darkgray)]"
+                  }`}
+                />
+              </label>
+
+              <div className="md:col-span-2">
+                {isProfileEditMode ? (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90 md:w-auto md:px-8"
+                    >
+                      Save Profile
+                    </button>
+                    <a
+                      href={profileViewUrl}
+                      className="inline-flex w-full items-center justify-center rounded-xl border border-[var(--lightgray)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--black)] transition hover:bg-[var(--secondary)] md:w-auto"
+                    >
+                      Cancel
+                    </a>
+                  </div>
+                ) : (
+                  <a
+                    href={profileEditUrl}
+                    className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90 md:w-auto md:px-8"
+                  >
+                    Edit Profile
+                  </a>
+                )}
               </div>
-              <div className="rounded-3xl border border-white/80 bg-white/95 p-5 shadow-xl">
-                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Address</p>
-                <p className="mt-1 text-sm font-semibold text-[var(--black)]">{vendor.address || "Not set"}</p>
-              </div>
-              <div className="rounded-3xl border border-white/80 bg-white/95 p-5 shadow-xl">
-                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">WhatsApp</p>
-                <p className="mt-1 text-sm font-semibold text-[var(--black)]">{vendor.whatsapp_number || "Not set"}</p>
-              </div>
-              <div className="rounded-3xl border border-white/80 bg-white/95 p-5 shadow-xl">
-                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Date of Birth</p>
-                <p className="mt-1 text-sm font-semibold text-[var(--black)]">
-                  {vendor.dob ? fmtDateOnly(vendor.dob) : "Not set"}
-                </p>
-              </div>
-            </aside>
+            </form>
           </div>
         ) : (
           <div className="grid gap-6 xl:grid-cols-5">
