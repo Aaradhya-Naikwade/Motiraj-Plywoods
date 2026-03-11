@@ -91,16 +91,6 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-4 text-sm font-medium">
 
-          <Link
-            href="/vendor"
-            className={
-              isVendorsActive
-                ? activeNav
-                : `${navItem} hover:bg-black hover:text-white`
-            }
-          >
-            Vendors
-          </Link>
 
           <Link
             href="/"
@@ -112,6 +102,19 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
           >
             Home
           </Link>
+          
+          <Link
+            href="/vendor"
+            className={
+              isVendorsActive
+                ? activeNav
+                : `${navItem} hover:bg-black hover:text-white`
+            }
+          >
+            Vendors
+          </Link>
+
+
 
           <Link
             href="/about"
@@ -155,9 +158,8 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
 
       {/* Smooth Animated Mobile Dropdown */}
       <div
-        className={`md:hidden bg-[var(--secondary)] overflow-hidden transition-all duration-500 ease-in-out ${
-          isOpen ? "max-h-96 opacity-100 py-4 px-4" : "max-h-0 opacity-0"
-        }`}
+        className={`md:hidden bg-[var(--secondary)] overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? "max-h-96 opacity-100 py-4 px-4" : "max-h-0 opacity-0"
+          }`}
       >
         {/* Mobile Search */}
         <div className="relative mb-4">
@@ -174,12 +176,12 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
 
         <div className="flex flex-col space-y-3 text-amber-800 font-medium">
 
-          <Link href="/vendor" onClick={() => setIsOpen(false)}>
-            Vendors
-          </Link>
-
           <Link href="/" onClick={() => setIsOpen(false)}>
             Home
+          </Link>
+
+          <Link href="/vendor" onClick={() => setIsOpen(false)}>
+            Vendors
           </Link>
 
           <Link href="/about" onClick={() => setIsOpen(false)}>

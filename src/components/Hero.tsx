@@ -10,7 +10,7 @@ const Hero = () => {
   const menuData: Record<string, string[]> = {
     Gallery: [
       "Bed n Cabinets",
-      "Decoratives N Temple",
+      "Decoratives n Temple",
       "Door",
       "Exteriors",
       "Furnishing",
@@ -20,11 +20,51 @@ const Hero = () => {
       "Shop n Office",
       "Sofa",
     ],
-    
-    Products: ["Plywood", "Flush Doors", "Block Boards"],
-    Decorative: ["Veneers", "Wall Panels", "Highlighters"],
-    Laminates: ["Sunmica", "PVC Laminates", "Acrylic Sheets"],
-    Hardware: ["Handles", "Locks", "Hinges", "Channels"],
+
+    Products: [
+      "Bath Accessories",
+      "Decoratives",
+      "Door Lock n Kits",
+      "Hardware n Other Items",
+      "Locks Pics",
+      "Sofa Leg And Curtain Bracket",
+    ],
+
+    Decorative: [
+      "8-2 Panel",
+      "8-4 Panel Sheets",
+      "Charcoal",
+      "Leather Panel",
+      "Louvers Premium",
+      "Premium CNC",
+      "Rafters Louvers",
+      "Vineer Teak",
+      "Wallpapers",
+      "Other Mix Decoratives",
+    ],
+
+    Laminates: [
+      "Mica .8mm",
+      "Mica .95mm",
+      "Mica 1mm",
+      "Mica Acrylic",
+      "Mica Asa Sheet Pastle",
+      "Mica Digital",
+      "Mica Door Skin",
+      "Mica Liner",
+      "Mica Pastle Colour",
+      "Mica Premium",
+      "Mica PVC",
+      "PVC Door Designs",
+    ],
+
+    Hardware: [
+      "Bath Accessories",
+      "Door kit",
+      "Handle Lock",
+      "Kitchen Accessories",
+      "Pull Handle",
+    ],
   };
 
   const navItems = ["Gallery", "Products", "Decorative", "Laminates", "Hardware"];
@@ -47,11 +87,10 @@ const Hero = () => {
                 setActiveTab(activeTab === item ? null : item)
               }
               className={`w-full py-3 md:py-4 text-sm md:text-lg font-medium capitalize transition-all
-              ${
-                activeTab === item
+              ${activeTab === item
                   ? "bg-[var(--darkb)] text-white"
                   : "text-black hover:bg-black/5"
-              }`}
+                }`}
             >
               {item}
             </button>
@@ -60,11 +99,10 @@ const Hero = () => {
               className={`
               absolute left-0 top-full w-full z-40
               transition-all duration-300 ease-in-out
-              ${
-                activeTab === item
+              ${activeTab === item
                   ? "max-h-[70vh] overflow-y-auto opacity-100"
                   : "max-h-0 overflow-hidden opacity-0 pointer-events-none"
-              }
+                }
               `}
               style={{
                 backgroundColor: "var(--primary)",

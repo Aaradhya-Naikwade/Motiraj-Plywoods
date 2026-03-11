@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ADMIN_AUTH_COOKIE, isValidAdminCredentials } from "@/lib/admin-auth";
+import { INDUSTRY_LEADER_ROLE_ORDER, updateIndustryLeaders } from "@/lib/industry-leaders-repo";
 import { deleteLead, updateLead } from "@/lib/lead-repo";
 import { adminUpdateVendor, deleteVendorById, findVendorById } from "@/lib/vendor-repo";
 import {
@@ -210,6 +211,103 @@ export async function adminDeleteLeadAction(leadId: string) {
     return { ok: false, error: "Lead not found." };
   }
 
+  revalidatePath("/admin/dashboard");
+  return { ok: true };
+}
+
+export async function adminUpdateIndustryLeadersAction(input: {
+  formData: FormData;
+}) {
+  await requireAdminSession();
+
+  const leaders = INDUSTRY_LEADER_ROLE_ORDER.map((role) => {
+    const name = String(input.formData.get(`name_${role}`) ?? "").trim();
+    const designation = String(input.formData.get(`designation_${role}`) ?? "").trim();
+    const message = String(input.formData.get(`message_${role}`) ?? "").trim();
+    const existingImageUrl = String(input.formData.get(`imageUrl_${role}`) ?? "").trim();
+    const imageFile = input.formData.get(`imageFile_${role}`);
+
+    return {
+      role,
+      name,
+      designation,
+      message,
+      existingImageUrl,
+      imageFile: imageFile instanceof File && imageFile.size > 0 ? imageFile : null,
+    };
+  });
+
+  async function uploadLeaderImage(file: File): Promise<string> {
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    if (!cloudName || !apiKey || !apiSecret) {
+      throw new Error("Cloudinary credentials are missing.");
+    }
+
+    const allowedMime = new Set(["image/jpeg", "image/png", "image/webp"]);
+    if (!allowedMime.has(file.type)) {
+      throw new Error("Unsupported image format. Use JPG, PNG, or WEBP.");
+    }
+
+    const { createHash } = await import("crypto");
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const folder = "industry-leaders";
+    const paramsToSign = `folder=${folder}&timestamp=${timestamp}`;
+    const signature = createHash("sha1").update(`${paramsToSign}${apiSecret}`).digest("hex");
+
+    const payload = new FormData();
+    payload.set("file", file);
+    payload.set("folder", folder);
+    payload.set("timestamp", timestamp);
+    payload.set("api_key", apiKey);
+    payload.set("signature", signature);
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+      method: "POST",
+      body: payload,
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error("Cloudinary upload failed.");
+    }
+
+    const data = (await response.json()) as { secure_url?: string };
+    if (!data.secure_url) {
+      throw new Error("Cloudinary upload returned no URL.");
+    }
+
+    return data.secure_url;
+  }
+
+  const leadersWithImage = [];
+  for (const leader of leaders) {
+    let imageUrl = leader.existingImageUrl;
+    if (leader.imageFile) {
+      try {
+        imageUrl = await uploadLeaderImage(leader.imageFile);
+      } catch {
+        return { ok: false, error: `Image upload failed for ${leader.role}. Use JPG, PNG, or WEBP.` };
+      }
+    }
+
+    if (!leader.name || !leader.designation || !leader.message || !imageUrl) {
+      return { ok: false, error: "All fields are required for each leader card." };
+    }
+
+    leadersWithImage.push({
+      role: leader.role,
+      name: leader.name,
+      designation: leader.designation,
+      message: leader.message,
+      image_url: imageUrl,
+    });
+  }
+
+  await updateIndustryLeaders(leadersWithImage);
+
+  revalidatePath("/");
   revalidatePath("/admin/dashboard");
   return { ok: true };
 }

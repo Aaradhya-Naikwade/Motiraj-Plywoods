@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   ChevronLeft,
   ChevronRight,
+  Crown,
   Eye,
   LayoutDashboard,
   LogOut,
@@ -17,7 +19,7 @@ import {
   X,
 } from "lucide-react";
 
-type TabId = "overview" | "vendors" | "products" | "leads";
+type TabId = "overview" | "vendors" | "products" | "leads" | "leaders";
 
 export type VendorRow = {
   id: string;
@@ -57,7 +59,20 @@ export type LeadRow = {
   notes: string;
 };
 
+export type IndustryLeaderRow = {
+  role: "president" | "secretary" | "top_performer";
+  name: string;
+  designation: string;
+  message: string;
+  imageUrl: string;
+};
+
+type IndustryLeaderFormRow = IndustryLeaderRow & {
+  imageFile: File | null;
+};
+
 const PAGE_SIZE = 8;
+const INDUSTRY_LEADER_IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
 type AdminDashboardClientProps = {
   activeTab?: string;
@@ -83,9 +98,13 @@ type AdminDashboardClientProps = {
     notes: string;
   }) => Promise<{ ok: boolean; error?: string }>;
   onDeleteLeadAction: (leadId: string) => Promise<{ ok: boolean; error?: string }>;
+  onUpdateIndustryLeadersAction: (input: {
+    formData: FormData;
+  }) => Promise<{ ok: boolean; error?: string }>;
   initialVendors: VendorRow[];
   initialProducts: ProductRow[];
   initialLeads: LeadRow[];
+  initialIndustryLeaders: IndustryLeaderRow[];
 };
 
 const tabs: Array<{ id: TabId; label: string; icon: typeof LayoutDashboard }> = [
@@ -93,10 +112,11 @@ const tabs: Array<{ id: TabId; label: string; icon: typeof LayoutDashboard }> = 
   { id: "vendors", label: "Vendors", icon: Store },
   { id: "products", label: "Products", icon: Package },
   { id: "leads", label: "Leads", icon: Mail },
+  { id: "leaders", label: "Leaders", icon: Crown },
 ];
 
 function normalizeTab(input?: string): TabId {
-  if (input === "vendors" || input === "products" || input === "leads") {
+  if (input === "vendors" || input === "products" || input === "leads" || input === "leaders") {
     return input;
   }
   return "overview";
@@ -157,9 +177,11 @@ export default function AdminDashboardClient({
   onDeleteProductAction,
   onUpdateLeadAction,
   onDeleteLeadAction,
+  onUpdateIndustryLeadersAction,
   initialVendors,
   initialProducts,
   initialLeads,
+  initialIndustryLeaders,
 }: AdminDashboardClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -172,6 +194,9 @@ export default function AdminDashboardClient({
   const [vendors, setVendors] = useState(initialVendors);
   const [products, setProducts] = useState(initialProducts);
   const [leads, setLeads] = useState(initialLeads);
+  const [industryLeaders, setIndustryLeaders] = useState<IndustryLeaderFormRow[]>(
+    initialIndustryLeaders.map((leader) => ({ ...leader, imageFile: null }))
+  );
   const [editingVendor, setEditingVendor] = useState<VendorRow | null>(null);
   const [deletingVendor, setDeletingVendor] = useState<VendorRow | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<ProductRow | null>(null);
@@ -200,6 +225,10 @@ export default function AdminDashboardClient({
   useEffect(() => {
     setLeads(initialLeads);
   }, [initialLeads]);
+
+  useEffect(() => {
+    setIndustryLeaders(initialIndustryLeaders.map((leader) => ({ ...leader, imageFile: null })));
+  }, [initialIndustryLeaders]);
 
   useEffect(() => {
     setVendorPage(1);
@@ -279,9 +308,11 @@ export default function AdminDashboardClient({
 
       if (!result.ok) {
         setActionError(result.error ?? "Unable to update vendor.");
+        toast.error(result.error ?? "Unable to update vendor.");
         return;
       }
 
+      toast.success("Vendor profile updated.");
       setEditingVendor(null);
       router.refresh();
     });
@@ -297,9 +328,11 @@ export default function AdminDashboardClient({
       const result = await onDeleteVendorAction(deletingVendor.id);
       if (!result.ok) {
         setActionError(result.error ?? "Unable to delete vendor.");
+        toast.error(result.error ?? "Unable to delete vendor.");
         return;
       }
 
+      toast.success("Vendor deleted successfully.");
       setDeletingVendor(null);
       router.refresh();
     });
@@ -320,9 +353,11 @@ export default function AdminDashboardClient({
 
       if (!result.ok) {
         setActionError(result.error ?? "Unable to update product.");
+        toast.error(result.error ?? "Unable to update product.");
         return;
       }
 
+      toast.success(product.hidden ? "Product is now visible." : "Product hidden successfully.");
       router.refresh();
     });
   }
@@ -333,9 +368,11 @@ export default function AdminDashboardClient({
       const result = await onDeleteProductAction(productId);
       if (!result.ok) {
         setActionError(result.error ?? "Unable to delete product.");
+        toast.error(result.error ?? "Unable to delete product.");
         return;
       }
 
+      toast.success("Product deleted successfully.");
       router.refresh();
     });
   }
@@ -355,9 +392,11 @@ export default function AdminDashboardClient({
 
       if (!result.ok) {
         setActionError(result.error ?? "Unable to update lead.");
+        toast.error(result.error ?? "Unable to update lead.");
         return;
       }
 
+      toast.success("Lead updated successfully.");
       setSelectedLead(null);
       router.refresh();
     });
@@ -373,13 +412,65 @@ export default function AdminDashboardClient({
       const result = await onDeleteLeadAction(deletingLead.id);
       if (!result.ok) {
         setActionError(result.error ?? "Unable to delete lead.");
+        toast.error(result.error ?? "Unable to delete lead.");
         return;
       }
 
+      toast.success("Lead deleted successfully.");
       setDeletingLead(null);
       if (selectedLead?.id === deletingLead.id) {
         setSelectedLead(null);
       }
+      router.refresh();
+    });
+  }
+
+  function updateIndustryLeaderField(
+    role: IndustryLeaderRow["role"],
+    field: keyof Omit<IndustryLeaderFormRow, "role" | "imageFile">,
+    value: string
+  ) {
+    setIndustryLeaders((current) =>
+      current.map((leader) =>
+        leader.role === role ? { ...leader, [field]: value } : leader
+      )
+    );
+  }
+
+  function updateIndustryLeaderImage(role: IndustryLeaderRow["role"], file: File | null) {
+    if (file && file.size > INDUSTRY_LEADER_IMAGE_MAX_SIZE_BYTES) {
+      toast.error("Leader image must be 5 MB or smaller.");
+      return;
+    }
+
+    setIndustryLeaders((current) =>
+      current.map((leader) =>
+        leader.role === role ? { ...leader, imageFile: file } : leader
+      )
+    );
+  }
+
+  function saveIndustryLeaders() {
+    setActionError(null);
+    startTransition(async () => {
+      const formData = new FormData();
+      for (const leader of industryLeaders) {
+        formData.set(`name_${leader.role}`, leader.name);
+        formData.set(`designation_${leader.role}`, leader.designation);
+        formData.set(`message_${leader.role}`, leader.message);
+        formData.set(`imageUrl_${leader.role}`, leader.imageUrl);
+        if (leader.imageFile) {
+          formData.set(`imageFile_${leader.role}`, leader.imageFile);
+        }
+      }
+
+      const result = await onUpdateIndustryLeadersAction({ formData });
+      if (!result.ok) {
+        setActionError(result.error ?? "Unable to update industry leaders.");
+        toast.error(result.error ?? "Unable to update industry leaders.");
+        return;
+      }
+      toast.success("Industry leaders updated successfully.");
       router.refresh();
     });
   }
@@ -528,7 +619,9 @@ export default function AdminDashboardClient({
                       ? "Vendor Management"
                       : selectedTab === "products"
                         ? "Product Management"
-                        : "Lead Inbox"}
+                        : selectedTab === "leads"
+                          ? "Lead Inbox"
+                          : "Industry Leaders"}
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm text-[var(--darkgray)]">
                   Review the marketplace, manage listings, and keep operations clean.
@@ -536,36 +629,36 @@ export default function AdminDashboardClient({
               </div>
             </div>
 
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-              <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
-                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Total Vendors</p>
-                <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{vendors.length}</p>
-              </div>
-              <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
-                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Total Products</p>
-                <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{products.length}</p>
-              </div>
-              <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
-                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Active Vendors</p>
-                <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{activeVendors}</p>
-              </div>
-              <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
-                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Inactive Vendors</p>
-                <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{inactiveVendors}</p>
-              </div>
-              <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
-                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Locked Vendors</p>
-                <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{lockedVendors}</p>
-              </div>
-              <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
-                <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Pending Vendors</p>
-                <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{pendingVendors}</p>
-              </div>
-            </div>
           </header>
 
           {selectedTab === "overview" ? (
             <div className="rounded-[28px] border border-white/75 bg-white/92 p-6 shadow-xl">
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+                  <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
+                    <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Total Vendors</p>
+                    <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{vendors.length}</p>
+                  </div>
+                  <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
+                    <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Total Products</p>
+                    <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{products.length}</p>
+                  </div>
+                  <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
+                    <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Active Vendors</p>
+                    <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{activeVendors}</p>
+                  </div>
+                  <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
+                    <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Inactive Vendors</p>
+                    <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{inactiveVendors}</p>
+                  </div>
+                  <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
+                    <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Locked Vendors</p>
+                    <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{lockedVendors}</p>
+                  </div>
+                  <div className="rounded-3xl border border-[var(--lightgray)]/70 bg-white p-4 shadow-sm">
+                    <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">Pending Vendors</p>
+                    <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{pendingVendors}</p>
+                  </div>
+                </div>
                 <h3 className="text-xl font-semibold text-[var(--black)]">Operational Summary</h3>
                 <div className="mt-6 grid gap-4 md:grid-cols-2">
                   <div className="rounded-2xl bg-[var(--secondary)] p-5">
@@ -702,6 +795,102 @@ export default function AdminDashboardClient({
                 </table>
               </div>
               <Pagination page={vendorPage} totalPages={vendorTotalPages} onPageChange={setVendorPage} />
+            </div>
+          ) : null}
+
+          {selectedTab === "leaders" ? (
+            <div className="rounded-[28px] border border-white/75 bg-white/92 p-6 shadow-xl">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-[var(--black)]">Industry Leaders Speak</h3>
+                  <p className="mt-1 text-sm text-[var(--darkgray)]">
+                    Update homepage leader cards (image, name, designation, and message).
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={saveIndustryLeaders}
+                  disabled={isPending}
+                  className="rounded-xl bg-[var(--black)] px-4 py-2.5 text-sm font-medium text-white"
+                >
+                  {isPending ? "Saving..." : "Save Leaders"}
+                </button>
+              </div>
+
+              <div className="mt-6 grid gap-4 lg:grid-cols-3">
+                {industryLeaders.map((leader) => (
+                  <div key={leader.role} className="rounded-2xl border border-[var(--lightgray)] bg-white p-4 shadow-sm">
+                    <p className="text-xs uppercase tracking-wide text-[var(--darkgray)]">
+                      {leader.role === "president"
+                        ? "President"
+                        : leader.role === "secretary"
+                          ? "Secretary"
+                          : "Top Performer"}
+                    </p>
+
+                    <label className="mt-3 block">
+                      <span className="mb-1 block text-sm font-medium text-[var(--black)]">Current Image</span>
+                      <img
+                        src={leader.imageUrl}
+                        alt={leader.name || leader.role}
+                        className="h-36 w-full rounded-xl border border-[var(--lightgray)] object-cover"
+                      />
+                    </label>
+
+                    <label className="mt-3 block">
+                      <span className="mb-1 block text-sm font-medium text-[var(--black)]">Choose New Image</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={(event) =>
+                          updateIndustryLeaderImage(leader.role, event.target.files?.[0] ?? null)
+                        }
+                        className="w-full rounded-xl border border-[var(--lightgray)] px-3 py-2 text-sm text-[var(--black)] outline-none focus:border-[var(--primary)]"
+                      />
+                      {leader.imageFile ? (
+                        <p className="mt-1 text-xs text-[var(--darkgray)]">Selected: {leader.imageFile.name}</p>
+                      ) : (
+                        <p className="mt-1 text-xs text-[var(--darkgray)]">No new file selected.</p>
+                      )}
+                    </label>
+
+                    <label className="mt-3 block">
+                      <span className="mb-1 block text-sm font-medium text-[var(--black)]">Name</span>
+                      <input
+                        value={leader.name}
+                        onChange={(event) =>
+                          updateIndustryLeaderField(leader.role, "name", event.target.value)
+                        }
+                        className="w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none focus:border-[var(--primary)]"
+                      />
+                    </label>
+
+                    <label className="mt-3 block">
+                      <span className="mb-1 block text-sm font-medium text-[var(--black)]">Designation</span>
+                      <input
+                        value={leader.designation}
+                        onChange={(event) =>
+                          updateIndustryLeaderField(leader.role, "designation", event.target.value)
+                        }
+                        className="w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none focus:border-[var(--primary)]"
+                      />
+                    </label>
+
+                    <label className="mt-3 block">
+                      <span className="mb-1 block text-sm font-medium text-[var(--black)]">Message</span>
+                      <textarea
+                        rows={4}
+                        value={leader.message}
+                        onChange={(event) =>
+                          updateIndustryLeaderField(leader.role, "message", event.target.value)
+                        }
+                        className="w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none focus:border-[var(--primary)]"
+                      />
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
 

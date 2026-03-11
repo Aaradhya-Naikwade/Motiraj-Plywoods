@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import {
   adminDeleteProductAction,
   adminDeleteLeadAction,
+  adminUpdateIndustryLeadersAction,
   adminDeleteVendorAction,
   adminLogoutAction,
   adminToggleProductVisibilityAction,
@@ -10,11 +11,12 @@ import {
   adminUpdateVendorAction,
 } from "../actions";
 import { ADMIN_AUTH_COOKIE } from "@/lib/admin-auth";
+import { getIndustryLeadersForAdmin } from "@/lib/industry-leaders-repo";
 import { findAllLeads } from "@/lib/lead-repo";
 import { findAllVendors, setVendorStatus } from "@/lib/vendor-repo";
 import { findAllVendorProducts } from "@/lib/vendor-product-repo";
 import { getVendorRenewalDate, isVendorRenewalExpired } from "@/lib/vendor-renewal";
-import AdminDashboardClient, { LeadRow, ProductRow, VendorRow } from "./AdminDashboardClient";
+import AdminDashboardClient, { IndustryLeaderRow, LeadRow, ProductRow, VendorRow } from "./AdminDashboardClient";
 
 type AdminDashboardPageProps = {
   searchParams: Promise<{ tab?: string }>;
@@ -71,10 +73,11 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
   }
 
   const params = await searchParams;
-  const [vendors, products, leads] = await Promise.all([
+  const [vendors, products, leads, industryLeaders] = await Promise.all([
     findAllVendors(),
     findAllVendorProducts(),
     findAllLeads(),
+    getIndustryLeadersForAdmin(),
   ]);
 
   await Promise.all(
@@ -140,6 +143,14 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
     notes: lead.notes ?? "",
   }));
 
+  const initialIndustryLeaders: IndustryLeaderRow[] = industryLeaders.map((leader) => ({
+    role: leader.role,
+    name: leader.name,
+    designation: leader.designation,
+    message: leader.message,
+    imageUrl: leader.image_url,
+  }));
+
   return (
     <AdminDashboardClient
       activeTab={params.tab}
@@ -150,9 +161,11 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
       onDeleteProductAction={adminDeleteProductAction}
       onUpdateLeadAction={adminUpdateLeadAction}
       onDeleteLeadAction={adminDeleteLeadAction}
+      onUpdateIndustryLeadersAction={adminUpdateIndustryLeadersAction}
       initialVendors={initialVendors}
       initialProducts={initialProducts}
       initialLeads={initialLeads}
+      initialIndustryLeaders={initialIndustryLeaders}
     />
   );
 }
