@@ -3,25 +3,24 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { findVendorById, setVendorStatus } from "@/lib/vendor-repo";
 import { findVendorProductsByVendorId } from "@/lib/vendor-product-repo";
+import { getVendorProductCategoryLabel, VENDOR_PRODUCT_CATEGORIES } from "@/lib/vendor-product-categories";
 import { isVendorRenewalExpired } from "@/lib/vendor-renewal";
 import { VENDOR_AUTH_COOKIE, verifyVendorSessionToken } from "@/lib/vendor-auth";
 import {
-  vendorCreateProductAction,
+  vendorCreateCategorizedProductsAction,
   vendorDeleteProductAction,
   vendorLogoutAction,
-  vendorUpdateProductAction,
   vendorUpdateProfileAction,
 } from "../actions";
 import DashboardAlerts from "./DashboardAlerts";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
 import { Building2, CalendarDays, MapPin, Phone, User } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
+import ProductCategoryManager from "./ProductCategoryManager";
 
 type VendorDashboardPageProps = {
-  searchParams: Promise<{ status?: string; error?: string; tab?: string; page?: string; edit?: string; mode?: string }>;
+  searchParams: Promise<{ status?: string; error?: string; tab?: string; mode?: string }>;
 };
-
-const PRODUCTS_PER_PAGE = 6;
 
 function fmtDate(date: Date | null) {
   return date
@@ -125,22 +124,16 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
   const params = await searchParams;
   const activeTab = params.tab === "products" ? "products" : "profile";
   const isProfileEditMode = activeTab === "profile" && params.mode === "edit";
-  const totalPages = Math.max(1, Math.ceil(products.length / PRODUCTS_PER_PAGE));
-  const requestedPage = Number(params.page ?? "1");
-  const currentPage = Number.isFinite(requestedPage)
-    ? Math.min(Math.max(1, Math.floor(requestedPage)), totalPages)
-    : 1;
-  const pageStart = (currentPage - 1) * PRODUCTS_PER_PAGE;
-  const visibleProducts = products.slice(pageStart, pageStart + PRODUCTS_PER_PAGE);
-  const selectedProduct = products.find((product) => product._id.toString() === params.edit) ?? null;
-  const buildProductsUrl = (page: number, editId?: string) =>
-    `/vendor/dashboard?tab=products&page=${page}${editId ? `&edit=${editId}` : ""}`;
   const profileViewUrl = "/vendor/dashboard?tab=profile";
   const profileEditUrl = "/vendor/dashboard?tab=profile&mode=edit";
   const vendorDobValue = vendor.dob ? vendor.dob.toISOString().slice(0, 10) : "";
   const dobMaxDate = new Date();
   dobMaxDate.setFullYear(dobMaxDate.getFullYear() - 18);
   const maxDobValue = dobMaxDate.toISOString().slice(0, 10);
+  const groupedProducts = VENDOR_PRODUCT_CATEGORIES.map((category) => ({
+    ...category,
+    items: products.filter((product) => product.category_key === category.key),
+  })).filter((category) => category.items.length > 0);
 
   return (
     <section className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#f7f2eb_0%,_#efe6dc_42%,_#e6dacc_100%)] px-4 py-8 md:px-8 md:py-10">
@@ -358,331 +351,71 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
             </form>
           </div>
         ) : (
-          <div className="grid gap-6 xl:grid-cols-5">
-            <div className="rounded-3xl border border-white/80 bg-white/95 p-6 shadow-xl xl:col-span-2">
-              <h2 className="text-xl font-semibold text-[var(--black)]">Add Product</h2>
-              <p className="mt-1 text-sm text-[var(--darkgray)]">
-                Fill the details and upload up to 8 images (JPG/PNG/WEBP).
-              </p>
+          <div className="space-y-6">
+            <ProductCategoryManager saveAction={vendorCreateCategorizedProductsAction} />
 
-              <form action={vendorCreateProductAction} className="mt-5 space-y-4">
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-[var(--black)]">Product Title *</span>
-                  <input
-                    name="title"
-                    type="text"
-                    required
-                    placeholder="e.g. Premium Plywood Sheet"
-                    className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-[var(--black)]">Description *</span>
-                  <textarea
-                    name="description"
-                    rows={3}
-                    required
-                    placeholder="Key features, dimensions, quality etc."
-                    className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                  />
-                </label>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="mb-1 block text-sm font-medium text-[var(--black)]">City *</span>
-                    <input
-                      name="city"
-                      type="text"
-                      required
-                      placeholder="Indore"
-                      className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="mb-1 block text-sm font-medium text-[var(--black)]">Price</span>
-                    <input
-                      name="price"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="2500"
-                      className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                    />
-                  </label>
+            <div className="rounded-[28px] border border-white/80 bg-white/95 p-6 shadow-xl">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xl font-semibold text-[var(--black)]">Saved Category Images</h3>
+                  <p className="mt-1 text-sm text-[var(--darkgray)]">
+                    These images are already live in your vendor gallery. Delete and re-upload if you need a different category.
+                  </p>
                 </div>
-
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-[var(--black)]">Discount %</span>
-                  <input
-                    name="discountPercent"
-                    type="number"
-                    min="0"
-                    max="99"
-                    placeholder="10"
-                    className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-[var(--black)]">Product Images *</span>
-                  <input
-                    name="images"
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    multiple
-                    required
-                    className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm"
-                  />
-                </label>
-
-                <button
-                  type="submit"
-                  className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90"
-                >
-                  Add Product
-                </button>
-              </form>
-            </div>
-
-            <div className="space-y-4 xl:col-span-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-semibold text-[var(--black)]">Your Products</h3>
-                <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-[var(--darkgray)] shadow">
-                  {products.length} total
+                <span className="rounded-full bg-[var(--secondary)] px-3 py-1 text-xs font-medium text-[var(--black)]">
+                  {products.length} live images
                 </span>
               </div>
 
-              {products.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-[#c8b79f] bg-white/80 p-8 text-center text-[var(--darkgray)]">
-                  No products yet. Add your first product using the form.
+              {groupedProducts.length === 0 ? (
+                <div className="mt-5 rounded-2xl border border-dashed border-[#c8b79f] bg-white/80 p-8 text-center text-[var(--darkgray)]">
+                  No categorized images yet. Upload a batch above and drag them into the right category boxes.
                 </div>
               ) : (
-                <div className="space-y-5">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {visibleProducts.map((product) => (
-                    <div
-                      key={product._id.toString()}
-                      className="rounded-2xl border border-white/80 bg-white/95 p-4 shadow-xl"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex min-w-0 items-start gap-3">
-                          <Image
-                            src={product.image_urls[0] || "/image/plywood.png"}
-                            alt={product.title}
-                            width={96}
-                            height={96}
-                            className="h-20 w-20 rounded-xl object-cover"
-                          />
-                          <div className="min-w-0">
-                            <p className="truncate text-base font-semibold text-[var(--black)]">{product.title}</p>
-                            <p className="text-sm text-[var(--darkgray)]">{product.city}</p>
-                            <p className="text-xs text-[var(--darkgray)]">{product.image_urls.length} image(s)</p>
-                            <p className="mt-1 text-xs text-[var(--darkgray)]">
-                              {product.discount_percent !== null ? `${product.discount_percent}% off` : "No discount"}
-                            </p>
-                          </div>
+                <div className="mt-6 space-y-6">
+                  {groupedProducts.map((group) => (
+                    <div key={group.key} className="rounded-[24px] border border-[#e6d7c4] bg-[var(--secondary)]/45 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-lg font-semibold text-[var(--black)]">
+                            {getVendorProductCategoryLabel(group.key)}
+                          </h4>
+                          <p className="mt-1 text-xs text-[var(--darkgray)]">
+                            {group.items.length} image{group.items.length === 1 ? "" : "s"} in this category
+                          </p>
                         </div>
-
-                        <span className="rounded-full bg-[var(--secondary)] px-3 py-1 text-xs font-medium text-[var(--black)]">
-                          {product.price !== null
-                            ? `Rs ${product.price.toLocaleString("en-IN", {
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 2,
-                              })}`
-                            : "Price NA"}
-                        </span>
                       </div>
 
-                      <div className="mt-4 flex items-center justify-end gap-2 border-t border-[var(--lightgray)] pt-3">
-                        <a
-                          href={buildProductsUrl(currentPage, product._id.toString())}
-                          className="rounded-lg border border-[var(--lightgray)] px-3 py-1.5 text-xs font-semibold text-[var(--black)] transition hover:bg-[var(--secondary)]"
-                        >
-                          Edit Product
-                        </a>
-                        <form action={vendorDeleteProductAction}>
-                          <input type="hidden" name="productId" value={product._id.toString()} />
-                          <ConfirmSubmitButton
-                            confirmMessage="Are you sure you want to delete this product?"
-                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
-                          >
-                            Delete Product
-                          </ConfirmSubmitButton>
-                        </form>
-                      </div>
-                    </div>
-                    ))}
-                  </div>
-
-                  {totalPages > 1 ? (
-                    <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-                      <a
-                        href={buildProductsUrl(Math.max(1, currentPage - 1))}
-                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
-                          currentPage === 1
-                            ? "pointer-events-none border-[var(--lightgray)] text-[var(--darkgray)]/60"
-                            : "border-[var(--lightgray)] text-[var(--black)] hover:bg-[var(--secondary)]"
-                        }`}
-                      >
-                        Prev
-                      </a>
-
-                      {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pageNumber) => (
-                        <a
-                          key={pageNumber}
-                          href={buildProductsUrl(pageNumber)}
-                          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                            pageNumber === currentPage
-                              ? "bg-[var(--black)] text-white"
-                              : "border border-[var(--lightgray)] text-[var(--black)] hover:bg-[var(--secondary)]"
-                          }`}
-                        >
-                          {pageNumber}
-                        </a>
-                      ))}
-
-                      <a
-                        href={buildProductsUrl(Math.min(totalPages, currentPage + 1))}
-                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
-                          currentPage === totalPages
-                            ? "pointer-events-none border-[var(--lightgray)] text-[var(--darkgray)]/60"
-                            : "border-[var(--lightgray)] text-[var(--black)] hover:bg-[var(--secondary)]"
-                        }`}
-                      >
-                        Next
-                      </a>
-                    </div>
-                  ) : null}
-
-                  {selectedProduct ? (
-                    <div className="fixed inset-0 z-[95] flex items-start justify-center overflow-y-auto bg-black/60 p-2 backdrop-blur-[2px] md:items-center md:p-4">
-                      <div className="my-2 w-full max-w-5xl rounded-2xl border border-white/80 bg-white shadow-2xl md:my-0 md:rounded-3xl">
-                        <div className="flex items-center justify-between gap-4 rounded-t-2xl border-b border-[var(--lightgray)] bg-[linear-gradient(135deg,#f8efe3_0%,#f4e7d8_100%)] px-4 py-3 md:rounded-t-3xl md:px-5 md:py-4">
-                          <div>
-                            <h4 className="text-lg font-semibold text-[var(--black)]">Edit Product</h4>
-                            <p className="text-xs text-[var(--darkgray)]">{selectedProduct.title}</p>
-                          </div>
-                          <a
-                            href={buildProductsUrl(currentPage)}
-                            aria-label="Close edit modal"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--lightgray)] bg-white text-base font-semibold leading-none text-[var(--black)] transition hover:bg-[var(--secondary)]"
-                          >x</a>
-                        </div>
-
-                        <form action={vendorUpdateProductAction} className="grid gap-3 p-4 md:grid-cols-3 md:gap-4 md:p-5">
-                          <input type="hidden" name="productId" value={selectedProduct._id.toString()} />
-
-                          <div className="grid gap-3 sm:grid-cols-2 md:col-span-2">
-                            <label className="block">
-                              <span className="mb-1 block text-sm font-medium text-[var(--black)]">Product Title *</span>
-                              <input
-                                name="title"
-                                type="text"
-                                required
-                                defaultValue={selectedProduct.title}
-                                className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                              />
-                            </label>
-
-                            <label className="block">
-                              <span className="mb-1 block text-sm font-medium text-[var(--black)]">City *</span>
-                              <input
-                                name="city"
-                                type="text"
-                                required
-                                defaultValue={selectedProduct.city}
-                                className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                              />
-                            </label>
-
-                            <label className="block">
-                              <span className="mb-1 block text-sm font-medium text-[var(--black)]">Price</span>
-                              <input
-                                name="price"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                defaultValue={selectedProduct.price ?? ""}
-                                className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                              />
-                            </label>
-
-                            <label className="block">
-                              <span className="mb-1 block text-sm font-medium text-[var(--black)]">Discount %</span>
-                              <input
-                                name="discountPercent"
-                                type="number"
-                                min="0"
-                                max="99"
-                                step="1"
-                                defaultValue={selectedProduct.discount_percent ?? ""}
-                                className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                              />
-                            </label>
-
-                            <label className="block sm:col-span-2">
-                              <span className="mb-1 block text-sm font-medium text-[var(--black)]">Description *</span>
-                              <textarea
-                                name="description"
-                                rows={2}
-                                required
-                                defaultValue={selectedProduct.description}
-                                className="text-[var(--black)] w-full rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[var(--primary)]"
-                              />
-                            </label>
-                          </div>
-
-                          <aside className="rounded-xl border border-[var(--lightgray)] bg-[var(--secondary)]/40 p-3 md:rounded-2xl">
-                            <p className="mb-2 text-sm font-semibold text-[var(--black)]">Current Images</p>
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                              {selectedProduct.image_urls.map((imageUrl) => (
-                                <label key={imageUrl} className="rounded-lg border border-[var(--lightgray)] bg-white p-1.5">
-                                  <Image
-                                    src={imageUrl}
-                                    alt={selectedProduct.title}
-                                    width={120}
-                                    height={80}
-                                    className="h-20 w-full rounded-md object-cover sm:h-16"
-                                  />
-                                  <span className="mt-1 flex items-center gap-1 text-[11px] text-[var(--darkgray)]">
-                                    <input type="checkbox" name="removeImage" value={imageUrl} /> Remove
-                                  </span>
-                                </label>
-                              ))}
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        {group.items.map((product) => (
+                          <div key={product._id.toString()} className="rounded-2xl border border-white/80 bg-white p-3 shadow-sm">
+                            <Image
+                              src={product.image_url || "/image/plywood.png"}
+                              alt={product.image_name}
+                              width={420}
+                              height={280}
+                              className="h-44 w-full rounded-xl object-cover"
+                            />
+                            <p className="mt-3 truncate text-sm font-semibold text-[var(--black)]">{product.image_name}</p>
+                            <div className="mt-3 flex items-center justify-between gap-2">
+                              <span className="rounded-full bg-[var(--secondary)] px-3 py-1 text-[11px] font-medium text-[var(--black)]">
+                                {getVendorProductCategoryLabel(product.category_key)}
+                              </span>
+                              <form action={vendorDeleteProductAction}>
+                                <input type="hidden" name="productId" value={product._id.toString()} />
+                                <ConfirmSubmitButton
+                                  confirmMessage="Are you sure you want to delete this image?"
+                                  className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                                >
+                                  Delete
+                                </ConfirmSubmitButton>
+                              </form>
                             </div>
-
-                            <label className="mt-3 block">
-                              <span className="mb-1 block text-xs font-medium text-[var(--black)]">Add More Images</span>
-                              <input
-                                name="images"
-                                type="file"
-                                accept="image/png,image/jpeg,image/webp"
-                                multiple
-                                className="text-[var(--black)] w-full rounded-lg border border-[var(--lightgray)] bg-white px-2 py-2 text-xs"
-                              />
-                            </label>
-                          </aside>
-
-                          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--lightgray)] pt-3 md:col-span-3">
-                            <a
-                              href={buildProductsUrl(currentPage)}
-                              className="w-full rounded-xl border border-[var(--lightgray)] px-4 py-2.5 text-center text-sm font-semibold text-[var(--black)] transition hover:bg-[var(--secondary)] sm:w-auto"
-                            >
-                              Cancel
-                            </a>
-                            <button
-                              type="submit"
-                              className="w-full rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90 sm:w-auto"
-                            >
-                              Save Product Changes
-                            </button>
                           </div>
-                        </form>
+                        ))}
                       </div>
                     </div>
-                  ) : null}
+                  ))}
                 </div>
               )}
             </div>

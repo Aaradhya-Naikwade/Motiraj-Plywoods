@@ -13,6 +13,7 @@ import {
 import { ADMIN_AUTH_COOKIE } from "@/lib/admin-auth";
 import { getIndustryLeadersForAdmin } from "@/lib/industry-leaders-repo";
 import { findAllLeads } from "@/lib/lead-repo";
+import { getVendorProductCategoryLabel } from "@/lib/vendor-product-categories";
 import { findAllVendors, setVendorStatus } from "@/lib/vendor-repo";
 import { findAllVendorProducts } from "@/lib/vendor-product-repo";
 import { getVendorRenewalDate, isVendorRenewalExpired } from "@/lib/vendor-renewal";
@@ -33,17 +34,6 @@ function formatDate(date: Date | null | undefined) {
     month: "short",
     year: "numeric",
   });
-}
-
-function formatPrice(price: number | null) {
-  if (price === null) {
-    return "Price NA";
-  }
-
-  return `Rs ${price.toLocaleString("en-IN", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })}`;
 }
 
 function formatDateInput(date: Date | null | undefined): string {
@@ -123,11 +113,10 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
 
   const initialProducts: ProductRow[] = products.map((product) => ({
     id: product._id.toString(),
-    name: product.title,
+    category: getVendorProductCategoryLabel(product.category_key),
+    imageName: product.image_name,
     vendor: vendorNameById.get(product.vendor_id.toString()) ?? "Unknown Vendor",
-    city: product.city,
-    price: formatPrice(product.price),
-    image: product.image_urls[0] || "/image/plywood.png",
+    image: product.image_url || "/image/plywood.png",
     hidden: product.hidden ?? false,
   }));
 

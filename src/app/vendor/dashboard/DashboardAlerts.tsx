@@ -23,19 +23,13 @@ export default function DashboardAlerts({ status, error }: DashboardAlertsProps)
     }
 
     if (status === "product_created") {
-      toast.success("Product added successfully.");
-      shownRef.current = true;
-      return;
-    }
-
-    if (status === "product_updated") {
-      toast.success("Product updated successfully.");
+      toast.success("Images saved to categories successfully.");
       shownRef.current = true;
       return;
     }
 
     if (status === "product_deleted") {
-      toast.success("Product deleted successfully.");
+      toast.success("Image deleted successfully.");
       shownRef.current = true;
       return;
     }
@@ -77,25 +71,31 @@ export default function DashboardAlerts({ status, error }: DashboardAlertsProps)
     }
 
     if (error === "images_required") {
-      toast.error("At least one product image is required.");
+      toast.error("Please choose at least one image.");
       shownRef.current = true;
       return;
     }
 
     if (error === "too_many_images") {
-      toast.error("You can upload up to 8 images per product.");
+      toast.error("Too many images selected for one upload batch.");
       shownRef.current = true;
       return;
     }
 
-    if (error === "invalid_price") {
-      toast.error("Price cannot be negative.");
+    if (error === "images_unassigned") {
+      toast.error("Assign every image to a category before saving.");
       shownRef.current = true;
       return;
     }
 
-    if (error === "invalid_discount") {
-      toast.error("Discount must be between 0 and 99.");
+    if (error === "invalid_category_assignment") {
+      toast.error("Some image category assignments were invalid. Please try again.");
+      shownRef.current = true;
+      return;
+    }
+
+    if (error === "image_too_large") {
+      toast.error("Each image must be 8 MB or smaller.");
       shownRef.current = true;
       return;
     }

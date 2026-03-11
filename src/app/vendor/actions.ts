@@ -1,14 +1,22 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { MongoServerError } from "mongodb";
 import { createHash } from "crypto";
 import { VENDOR_AUTH_COOKIE, VENDOR_SESSION_TTL_SECONDS, createVendorSessionToken, hashPassword, isStrongPassword, isValidMobile, normalizeMobile, verifyPassword, verifyVendorSessionToken } from "@/lib/vendor-auth";
 import { createVendor, findVendorById, findVendorByMobile, setVendorStatus, updateVendorLastLogin, updateVendorProfile } from "@/lib/vendor-repo";
-import { createVendorProduct, deleteVendorProduct, findVendorProductById, updateVendorProduct } from "@/lib/vendor-product-repo";
+import { createVendorProducts, deleteVendorProduct, getVendorProductImageUrls } from "@/lib/vendor-product-repo";
 import { removeUploadedImages } from "@/lib/vendor-product-images";
 import { isVendorRenewalExpired } from "@/lib/vendor-renewal";
+import {
+  VENDOR_PRODUCT_ALLOWED_MIME_TYPES,
+  VENDOR_PRODUCT_BATCH_MAX_FILES,
+  VENDOR_PRODUCT_IMAGE_MAX_SIZE_BYTES,
+  isVendorProductCategoryKey,
+  type VendorProductCategoryKey,
+} from "@/lib/vendor-product-categories";
 
 function buildRedirect(path: string, params: Record<string, string | undefined>) {
   const search = new URLSearchParams();
@@ -117,58 +125,6 @@ async function getAuthenticatedVendorOrRedirect() {
   return vendor;
 }
 
-function parseOptionalNumber(value: string): number | null {
-  const normalized = value.trim();
-  if (!normalized) {
-    return null;
-  }
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function parseOptionalPrice(value: string): number | null {
-  const parsed = parseOptionalNumber(value);
-  if (parsed === null) {
-    return null;
-  }
-  // Normalize floating-point noise and keep at most 2 decimals for currency.
-  return Math.round(parsed * 100) / 100;
-}
-
-function parseOptionalDiscountPercent(value: string): number | null {
-  const parsed = parseOptionalNumber(value);
-  if (parsed === null) {
-    return null;
-  }
-  // Discount is treated as a whole percent.
-  return Math.round(parsed);
-}
-
-function validateProductInput(input: {
-  title: string;
-  description: string;
-  city: string;
-  price: number | null;
-  discountPercent: number | null;
-}) {
-  if (!input.title || !input.description || !input.city) {
-    return "missing_fields";
-  }
-
-  if (input.price !== null && input.price < 0) {
-    return "invalid_price";
-  }
-
-  if (
-    input.discountPercent !== null &&
-    (input.discountPercent < 0 || input.discountPercent > 99)
-  ) {
-    return "invalid_discount";
-  }
-
-  return null;
-}
-
 async function storeProductImages(files: File[]): Promise<string[]> {
   if (files.length === 0) {
     return [];
@@ -182,12 +138,15 @@ async function storeProductImages(files: File[]): Promise<string[]> {
   }
 
   const folder = "vendor-products";
-  const allowedMime = new Set(["image/jpeg", "image/png", "image/webp"]);
+  const allowedMime = new Set(VENDOR_PRODUCT_ALLOWED_MIME_TYPES);
   const urls: string[] = [];
 
   for (const file of files) {
-    if (!allowedMime.has(file.type)) {
+    if (!allowedMime.has(file.type as (typeof VENDOR_PRODUCT_ALLOWED_MIME_TYPES)[number])) {
       throw new Error("Unsupported image format. Use JPG, PNG, or WEBP.");
+    }
+    if (file.size > VENDOR_PRODUCT_IMAGE_MAX_SIZE_BYTES) {
+      throw new Error("Image file too large.");
     }
 
     const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -220,6 +179,30 @@ async function storeProductImages(files: File[]): Promise<string[]> {
   }
 
   return urls;
+}
+
+function parseProductAssignments(input: string): Map<number, string> | null {
+  try {
+    const parsed = JSON.parse(input) as Array<{ index?: number; categoryKey?: string }>;
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+
+    const map = new Map<number, string>();
+    for (const entry of parsed) {
+      if (typeof entry?.index !== "number" || !Number.isInteger(entry.index) || entry.index < 0) {
+        return null;
+      }
+      if (typeof entry.categoryKey !== "string" || !isVendorProductCategoryKey(entry.categoryKey)) {
+        return null;
+      }
+      map.set(entry.index, entry.categoryKey);
+    }
+
+    return map;
+  } catch {
+    return null;
+  }
 }
 
 export async function vendorLoginAction(formData: FormData) {
@@ -382,26 +365,8 @@ export async function vendorUpdateProfileAction(formData: FormData) {
   redirect("/vendor/dashboard?status=profile_updated");
 }
 
-export async function vendorCreateProductAction(formData: FormData) {
+export async function vendorCreateCategorizedProductsAction(formData: FormData) {
   const vendor = await getAuthenticatedVendorOrRedirect();
-
-  const title = String(formData.get("title") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
-  const city = String(formData.get("city") ?? "").trim();
-  const price = parseOptionalPrice(String(formData.get("price") ?? ""));
-  const discountPercent = parseOptionalDiscountPercent(String(formData.get("discountPercent") ?? ""));
-
-  const validationError = validateProductInput({
-    title,
-    description,
-    city,
-    price,
-    discountPercent,
-  });
-
-  if (validationError) {
-    redirect(`/vendor/dashboard?tab=products&error=${validationError}`);
-  }
 
   const imageFiles = formData
     .getAll("images")
@@ -411,8 +376,21 @@ export async function vendorCreateProductAction(formData: FormData) {
     redirect("/vendor/dashboard?tab=products&error=images_required");
   }
 
-  if (imageFiles.length > 8) {
+  if (imageFiles.length > VENDOR_PRODUCT_BATCH_MAX_FILES) {
     redirect("/vendor/dashboard?tab=products&error=too_many_images");
+  }
+
+  if (imageFiles.some((file) => file.size > VENDOR_PRODUCT_IMAGE_MAX_SIZE_BYTES)) {
+    redirect("/vendor/dashboard?tab=products&error=image_too_large");
+  }
+
+  const assignmentMap = parseProductAssignments(String(formData.get("assignments") ?? ""));
+  if (!assignmentMap) {
+    redirect("/vendor/dashboard?tab=products&error=invalid_category_assignment");
+  }
+
+  if (imageFiles.some((_, index) => !assignmentMap.has(index))) {
+    redirect("/vendor/dashboard?tab=products&error=images_unassigned");
   }
 
   let imageUrls: string[] = [];
@@ -422,92 +400,23 @@ export async function vendorCreateProductAction(formData: FormData) {
     redirect("/vendor/dashboard?tab=products&error=image_upload_failed");
   }
 
-  await createVendorProduct({
-    vendor_id: vendor._id.toString(),
-    title,
-    description,
-    city,
-    price,
-    discount_percent: discountPercent,
-    image_urls: imageUrls,
-  });
-
-  redirect("/vendor/dashboard?tab=products&status=product_created");
-}
-
-export async function vendorUpdateProductAction(formData: FormData) {
-  const vendor = await getAuthenticatedVendorOrRedirect();
-
-  const productId = String(formData.get("productId") ?? "");
-  const title = String(formData.get("title") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
-  const city = String(formData.get("city") ?? "").trim();
-  const price = parseOptionalPrice(String(formData.get("price") ?? ""));
-  const discountPercent = parseOptionalDiscountPercent(String(formData.get("discountPercent") ?? ""));
-
-  const validationError = validateProductInput({
-    title,
-    description,
-    city,
-    price,
-    discountPercent,
-  });
-
-  if (validationError) {
-    redirect(`/vendor/dashboard?tab=products&error=${validationError}`);
-  }
-
-  const product = await findVendorProductById(productId);
-  if (!product || product.vendor_id.toString() !== vendor._id.toString()) {
-    redirect("/vendor/dashboard?tab=products&error=product_not_found");
-  }
-
-  const removedImages = formData
-    .getAll("removeImage")
-    .map((value) => String(value))
-    .filter(Boolean);
-
-  const imageFiles = formData
-    .getAll("images")
-    .filter((entry): entry is File => entry instanceof File && entry.size > 0);
-
-  const keptImages = product.image_urls.filter((url) => !removedImages.includes(url));
-
-  let newImageUrls: string[] = [];
   try {
-    newImageUrls = await storeProductImages(imageFiles);
+    await createVendorProducts({
+      vendor_id: vendor._id.toString(),
+      items: imageFiles.map((file, index) => ({
+        category_key: assignmentMap.get(index)! as VendorProductCategoryKey,
+        image_name: file.name,
+        image_url: imageUrls[index],
+      })),
+    });
   } catch {
+    await removeUploadedImages(imageUrls);
     redirect("/vendor/dashboard?tab=products&error=image_upload_failed");
   }
 
-  const nextImageUrls = [...keptImages, ...newImageUrls];
-
-  if (nextImageUrls.length === 0) {
-    await removeUploadedImages(newImageUrls);
-    redirect("/vendor/dashboard?tab=products&error=images_required");
-  }
-
-  if (nextImageUrls.length > 8) {
-    await removeUploadedImages(newImageUrls);
-    redirect("/vendor/dashboard?tab=products&error=too_many_images");
-  }
-
-  const updated = await updateVendorProduct(productId, vendor._id.toString(), {
-    title,
-    description,
-    city,
-    price,
-    discount_percent: discountPercent,
-    image_urls: nextImageUrls,
-  });
-
-  if (!updated) {
-    await removeUploadedImages(newImageUrls);
-    redirect("/vendor/dashboard?tab=products&error=product_not_found");
-  }
-
-  await removeUploadedImages(removedImages);
-  redirect("/vendor/dashboard?tab=products&status=product_updated");
+  revalidatePath("/vendor");
+  revalidatePath("/admin/dashboard");
+  redirect("/vendor/dashboard?tab=products&status=product_created");
 }
 
 export async function vendorDeleteProductAction(formData: FormData) {
@@ -519,6 +428,8 @@ export async function vendorDeleteProductAction(formData: FormData) {
     redirect("/vendor/dashboard?tab=products&error=product_not_found");
   }
 
-  await removeUploadedImages(deletedProduct.image_urls);
+  await removeUploadedImages(getVendorProductImageUrls(deletedProduct));
+  revalidatePath("/vendor");
+  revalidatePath("/admin/dashboard");
   redirect("/vendor/dashboard?tab=products&status=product_deleted");
 }

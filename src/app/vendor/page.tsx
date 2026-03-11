@@ -1,5 +1,6 @@
 import VendorHero from "@/components/VendorHero";
 import VendorProducts from "@/components/VendorProducts";
+import { getVendorProductCategoryLabel } from "@/lib/vendor-product-categories";
 import { findVisibleVendorProducts } from "@/lib/vendor-product-repo";
 import { findVendorsByIds } from "@/lib/vendor-repo";
 
@@ -18,12 +19,9 @@ export default async function VendorPage() {
 
       return {
         id: product._id.toString(),
-        title: product.title,
-        description: product.description,
-        city: product.city,
-        price: product.price,
-        discountPercent: product.discount_percent,
-        imageUrls: product.image_urls,
+        category: getVendorProductCategoryLabel(product.category_key),
+        imageName: product.image_name,
+        imageUrl: product.image_url,
         vendorName: owner.company_name,
         vendorMobile: owner.mobile,
         vendorWhatsapp: owner.whatsapp_number,

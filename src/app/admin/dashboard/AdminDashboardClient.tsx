@@ -39,10 +39,9 @@ export type VendorRow = {
 
 export type ProductRow = {
   id: string;
-  name: string;
+  category: string;
+  imageName: string;
   vendor: string;
-  city: string;
-  price: string;
   image: string;
   hidden: boolean;
 };
@@ -266,9 +265,9 @@ export default function AdminDashboardClient({
     const query = productSearch.trim().toLowerCase();
     const matchesSearch =
       query.length === 0 ||
-      product.name.toLowerCase().includes(query) ||
-      product.vendor.toLowerCase().includes(query) ||
-      product.city.toLowerCase().includes(query);
+      product.imageName.toLowerCase().includes(query) ||
+      product.category.toLowerCase().includes(query) ||
+      product.vendor.toLowerCase().includes(query);
 
     return matchesFilter && matchesSearch;
   });
@@ -900,7 +899,7 @@ export default function AdminDashboardClient({
                 <div>
                   <h3 className="text-xl font-semibold text-[var(--black)]">All Products</h3>
                   <p className="mt-1 text-sm text-[var(--darkgray)]">
-                    Review all products, hide or unhide them, and remove invalid listings.
+                    Review all vendor gallery images, hide or unhide them, and remove invalid listings.
                   </p>
                 </div>
 
@@ -928,7 +927,7 @@ export default function AdminDashboardClient({
                   <input
                     value={productSearch}
                     onChange={(event) => setProductSearch(event.target.value)}
-                    placeholder="Search product, vendor, or city"
+                    placeholder="Search category, image name, or vendor"
                     className="w-full rounded-2xl border border-[var(--lightgray)] bg-white py-3 pl-10 pr-4 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)]"
                   />
                 </label>
@@ -938,9 +937,9 @@ export default function AdminDashboardClient({
                 <table className="min-w-full border-separate border-spacing-y-3">
                   <thead>
                     <tr className="text-left text-xs uppercase tracking-wide text-[var(--darkgray)]">
-                      <th className="px-4 py-2 font-medium">Product Name</th>
+                      <th className="px-4 py-2 font-medium">Image Name</th>
+                      <th className="px-4 py-2 font-medium">Category</th>
                       <th className="px-4 py-2 font-medium">Vendor Name</th>
-                      <th className="px-4 py-2 font-medium">Price</th>
                       <th className="px-4 py-2 font-medium">Product Image</th>
                       <th className="px-4 py-2 font-medium">Action</th>
                     </tr>
@@ -949,15 +948,14 @@ export default function AdminDashboardClient({
                     {paginatedProducts.map((product) => (
                       <tr key={product.id} className="bg-[var(--secondary)]/35">
                         <td className="rounded-l-2xl px-4 py-4">
-                          <p className="font-semibold text-[var(--black)]">{product.name}</p>
-                          <p className="mt-1 text-sm text-[var(--darkgray)]">{product.city}</p>
+                          <p className="font-semibold text-[var(--black)]">{product.imageName}</p>
                         </td>
+                        <td className="px-4 py-4 text-sm text-[var(--black)]">{product.category}</td>
                         <td className="px-4 py-4 text-sm text-[var(--black)]">{product.vendor}</td>
-                        <td className="px-4 py-4 text-sm font-medium text-[var(--black)]">{product.price}</td>
                         <td className="px-4 py-4">
                           <img
                             src={product.image}
-                            alt={product.name}
+                            alt={product.imageName}
                             className="h-16 w-16 rounded-2xl object-cover"
                           />
                         </td>
@@ -1255,7 +1253,7 @@ export default function AdminDashboardClient({
                   This will permanently remove the product from the marketplace.
                 </p>
                 <p className="mt-2 text-sm text-[var(--darkgray)]">
-                  Product: <span className="font-medium text-[var(--black)]">{deletingProduct.name}</span>
+                  Image: <span className="font-medium text-[var(--black)]">{deletingProduct.imageName}</span>
                 </p>
               </div>
             </div>

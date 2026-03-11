@@ -11,6 +11,7 @@ import {
   adminDeleteVendorProduct,
   adminSetVendorProductHidden,
   deleteVendorProductsByVendorId,
+  getVendorProductImageUrls,
 } from "@/lib/vendor-product-repo";
 import { removeUploadedImages } from "@/lib/vendor-product-images";
 
@@ -141,7 +142,7 @@ export async function adminDeleteVendorAction(vendorId: string) {
   await requireAdminSession();
 
   const deletedProducts = await deleteVendorProductsByVendorId(vendorId);
-  await Promise.all(deletedProducts.map((product) => removeUploadedImages(product.image_urls)));
+  await Promise.all(deletedProducts.map((product) => removeUploadedImages(getVendorProductImageUrls(product))));
 
   const deletedVendor = await deleteVendorById(vendorId);
   if (!deletedVendor) {
@@ -177,7 +178,7 @@ export async function adminDeleteProductAction(productId: string) {
     return { ok: false, error: "Product not found." };
   }
 
-  await removeUploadedImages(deletedProduct.image_urls);
+  await removeUploadedImages(getVendorProductImageUrls(deletedProduct));
   revalidatePath("/admin/dashboard");
   revalidatePath("/vendor");
   return { ok: true };

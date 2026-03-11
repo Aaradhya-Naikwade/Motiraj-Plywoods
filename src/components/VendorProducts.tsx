@@ -1,15 +1,13 @@
 import Image from "next/image";
-import { Image as ImageIcon, Phone } from "lucide-react";
+import { Phone } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
+import { VENDOR_PRODUCT_CATEGORIES } from "@/lib/vendor-product-categories";
 
 type VendorPageProduct = {
   id: string;
-  title: string;
-  description: string;
-  city: string;
-  price: number | null;
-  discountPercent: number | null;
-  imageUrls: string[];
+  category: string;
+  imageName: string;
+  imageUrl: string;
   vendorName: string;
   vendorMobile: string;
   vendorWhatsapp: string | null;
@@ -21,89 +19,94 @@ type VendorProductsProps = {
 
 const VendorProducts = ({ products }: VendorProductsProps) => {
   const hasProducts = products.length > 0;
+  const groupedProducts = VENDOR_PRODUCT_CATEGORIES.map((category) => ({
+    category: category.label,
+    items: products.filter((product) => product.category === category.label),
+  })).filter((group) => group.items.length > 0);
 
   return (
     <section className="w-full bg-[#f6f3ef] py-20">
-      <h2 className="text-4xl font-semibold text-center mb-16 text-gray-900">
-        Get Skilled Workers On Demand Today
-      </h2>
+      <div className="mx-auto max-w-7xl px-6">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#8b3e12]">Vendor Gallery</p>
+          <h2 className="mt-4 text-4xl font-semibold text-gray-900">Browse Work by Category</h2>
+          <p className="mt-3 text-sm leading-6 text-gray-600">
+            Explore real vendor uploads sorted into dedicated categories so buyers can reach the right supplier faster.
+          </p>
+        </div>
 
-      <div className="max-w-7xl mx-auto grid md:grid-cols-3 gap-8 px-6">
         {!hasProducts ? (
-          <div className="md:col-span-3 rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-500">
-            No vendor products yet. Be the first vendor to add a product.
+          <div className="mt-16 rounded-3xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-500">
+            No vendor gallery images yet. Be the first vendor to publish your work.
           </div>
         ) : null}
 
-        {products.map((product) => (
-          <div
-            key={product.id}
-            className="bg-white rounded-3xl overflow-hidden shadow-md hover:shadow-xl transition duration-300 border border-gray-100"
-          >
-            <div className="relative group">
-              <Image
-                src={product.imageUrls[0] || "/image/plywood.png"}
-                alt={product.title}
-                width={500}
-                height={350}
-                className="w-full h-64 object-cover group-hover:scale-105 transition duration-500"
-              />
-
-              {product.discountPercent ? (
-                <div className="absolute top-4 right-4 bg-[#8b3e12] text-white text-xs px-3 py-1 rounded-full font-medium shadow">
-                  {product.discountPercent}% OFF
+        <div className="mt-16 space-y-12">
+          {groupedProducts.map((group) => (
+            <div key={group.category} className="rounded-[30px] border border-[#e6d8c6] bg-white/90 p-6 shadow-[0_22px_70px_-48px_rgba(67,38,6,0.38)] md:p-8">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-2xl font-semibold text-gray-900">{group.category}</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {group.items.length} image{group.items.length === 1 ? "" : "s"} available in this category
+                  </p>
                 </div>
-              ) : null}
-
-              {product.imageUrls.length > 1 ? (
-                <div className="absolute bottom-4 right-4 bg-white text-gray-700 text-xs px-3 py-1 rounded-full flex items-center gap-1 shadow">
-                  <ImageIcon size={14} />+{product.imageUrls.length - 1}
-                </div>
-              ) : null}
-            </div>
-
-            <div className="px-6 py-6 space-y-2">
-              <div className="flex justify-between items-center gap-2">
-                <h3 className="text-lg font-semibold text-gray-800">{product.title}</h3>
-
-                <button className="text-xs bg-[#947A57] hover:bg-[#7f6647] transition text-white px-3 py-1.5 rounded-full">
-                  {product.vendorName}
-                </button>
               </div>
 
-              {product.price !== null ? (
-                <div className="flex items-center gap-3 pt-1">
-                  <span className="text-xl font-bold text-gray-900">
-                    Rs {product.price.toLocaleString("en-IN")}
-                  </span>
-                </div>
-              ) : null}
+              <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {group.items.map((product) => (
+                  <div
+                    key={product.id}
+                    className="overflow-hidden rounded-[26px] border border-[#efe5d8] bg-[#fffdf9] shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl"
+                  >
+                    <div className="relative">
+                      <Image
+                        src={product.imageUrl || "/image/plywood.png"}
+                        alt={product.imageName}
+                        width={500}
+                        height={380}
+                        className="h-72 w-full object-cover"
+                      />
+                      <div className="absolute left-4 top-4 rounded-full bg-white/92 px-3 py-1 text-xs font-semibold text-[#8b3e12] shadow-sm">
+                        {group.category}
+                      </div>
+                    </div>
 
-              <p className="text-sm text-gray-500">{product.city}</p>
+                    <div className="space-y-3 px-5 py-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#8b3e12]/80">Vendor</p>
+                          <h4 className="mt-1 text-lg font-semibold text-gray-900">{product.vendorName}</h4>
+                        </div>
+                      </div>
 
-              <p className="text-sm text-gray-400">{product.description}</p>
+                      <p className="truncate text-sm text-gray-500">{product.imageName}</p>
+                    </div>
+
+                    <div className="flex border-t border-[#eadbc6]">
+                      <a
+                        href={`tel:${product.vendorMobile}`}
+                        className="flex-1 flex items-center justify-center gap-2 bg-[#8b3e12] px-4 py-4 font-medium text-white transition hover:bg-[#6f300e]"
+                      >
+                        <Phone size={18} />
+                        Contact Vendor
+                      </a>
+
+                      <a
+                        href={`https://wa.me/${product.vendorWhatsapp || product.vendorMobile}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-16 flex items-center justify-center border-l border-[#eadbc6] bg-white transition hover:bg-[#f7f1ea]"
+                      >
+                        <FaWhatsapp size={28} className="text-[#1c9c47]" />
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-
-            <div className="flex border-t  border-amber-600  rounded-tr-3xl rounded-tl-3xl">
-              <a
-                href={`tel:${product.vendorMobile}`}
-                className="flex-1 flex items-center justify-center gap-2 bg-[#8b3e12] hover:bg-[#6f300e] transition text-white py-4 font-medium rounded-tl-3xl"
-              >
-                <Phone size={20} />
-                Contact Supplier
-              </a>
-
-              <a
-                href={`https://wa.me/${product.vendorWhatsapp || product.vendorMobile}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-16 flex items-center justify-center border-l border-gray-100 hover:bg-gray-50 transition rounded-tr-3xl"
-              >
-                <FaWhatsapp size={30} className="text-[#8b3e12]" />
-              </a>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </section>
   );
