@@ -24,7 +24,7 @@ export default function VendorFloatingButton({ isVendorLoggedIn }: VendorFloatin
   return (
     <Link
       href="/vendor/auth"
-      className="fixed bottom-6 right-4 z-[60] rounded-full bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:opacity-90 md:bottom-8 md:right-8"
+      className="fixed bottom-24 right-4 z-[60] rounded-full bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:opacity-90 md:bottom-8 md:right-8"
     >
       Become a Vendor
     </Link>
