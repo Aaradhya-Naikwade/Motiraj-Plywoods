@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { X } from "lucide-react";
 
 const Hero = () => {
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -68,19 +70,38 @@ const Hero = () => {
   };
 
   const navItems = ["Gallery", "Products", "Decorative", "Laminates", "Hardware"];
+  const mobileIcons: Record<string, string> = {
+    Gallery: "/image/Gallery.png",
+    Products: "/image/Products.png",
+    Decorative: "/image/Decorative.png",
+    Hardware: "/image/Hardware.png",
+    Laminates: "/image/Laminaties.png",
+  };
+
+  useEffect(() => {
+    if (!activeTab) {
+      document.body.style.overflow = "";
+      return;
+    }
+
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [activeTab]);
 
   const handleRedirect = (item: string) => {
     const slug = item.toLowerCase().replace(/\s+/g, "-");
+    setActiveTab(null);
     router.push(`/catalog/${slug}`);
   };
 
   return (
     <section className="relative w-full">
-
-      <nav className="flex flex-wrap md:flex-nowrap w-full border-t border-b border-gray-300 bg-[var(--secondary)] relative z-30">
+      <nav className="relative z-30 hidden w-full border-b border-t border-gray-300 bg-[var(--secondary)] md:flex md:flex-nowrap">
 
         {navItems.map((item) => (
-          <div key={item} className="relative flex-1 min-w-[50%] md:min-w-0 border-r border-gray-300 last:border-r-0">
+          <div key={item} className="relative min-w-[50%] flex-1 border-r border-gray-300 last:border-r-0 md:min-w-0">
 
             <button
               onClick={() =>
@@ -127,6 +148,84 @@ const Hero = () => {
           </div>
         ))}
       </nav>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#d9ccbc] bg-[var(--secondary)] shadow-[0_-10px_28px_rgba(0,0,0,0.1)] md:hidden">
+        <div className="grid grid-cols-5">
+          {navItems.map((item) => {
+            const isActive = activeTab === item;
+            return (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setActiveTab(isActive ? null : item)}
+                className="relative flex min-h-[72px] flex-col items-center justify-center gap-1 px-1 pb-1.5 pt-2 text-black"
+              >
+                <span
+                  className={`absolute left-2 right-2 top-0 h-1 rounded-b-full transition ${
+                    isActive ? "bg-[var(--primary)]" : "bg-transparent"
+                  }`}
+                />
+                <Image
+                  src={mobileIcons[item]}
+                  alt={item}
+                  width={30}
+                  height={30}
+                  className="h-7 w-7 object-contain"
+                />
+                <span className={`text-[10px] font-semibold leading-tight ${isActive ? "text-[var(--primary)]" : "text-black"}`}>
+                  {item}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {activeTab ? (
+        <div className="fixed inset-0 z-50 bg-[var(--secondary)] md:hidden">
+          <div className="flex h-full flex-col px-5 pb-24 pt-4">
+            <div className="flex items-start justify-between gap-4 border-b border-[#d8ccbd] pb-3">
+              <div className="flex items-center gap-3">
+                <Image
+                  src={mobileIcons[activeTab]}
+                  alt={activeTab}
+                  width={36}
+                  height={36}
+                  className="h-9 w-9 object-contain"
+                />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--darkgray)]">Explore</p>
+                  <h2 className="mt-0.5 text-xl font-semibold text-[var(--black)]">{activeTab}</h2>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab(null)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#d8ccbd] bg-white text-[var(--black)] shadow-sm"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mt-4 flex-1 overflow-y-auto">
+              <ul className="space-y-2.5">
+                {menuData[activeTab].map((subItem) => (
+                  <li key={subItem}>
+                    <button
+                      type="button"
+                      onClick={() => handleRedirect(subItem)}
+                      className="flex w-full items-center justify-between rounded-2xl border border-[#d8ccbd] bg-white px-4 py-3.5 text-left text-[15px] font-medium text-[var(--black)] shadow-sm transition active:scale-[0.99]"
+                    >
+                      <span>{subItem}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="relative w-full overflow-hidden leading-[0]">
         <img

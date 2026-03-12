@@ -140,6 +140,24 @@ export async function findVisibleVendorProducts(): Promise<VendorProductDocument
   return docs.map(normalizeProductDocument).filter((doc): doc is VendorProductDocument => doc !== null);
 }
 
+export async function findVisibleVendorProductsByVendorId(vendorId: string): Promise<VendorProductDocument[]> {
+  if (!ObjectId.isValid(vendorId)) {
+    return [];
+  }
+
+  const collection = await getProductCollection();
+  const docs = await collection
+    .find({
+      vendor_id: new ObjectId(vendorId),
+      category_key: { $in: [...VENDOR_PRODUCT_CATEGORY_KEYS] },
+      $or: [{ hidden: { $exists: false } }, { hidden: false }],
+    })
+    .sort({ created_at: -1 })
+    .toArray();
+
+  return docs.map(normalizeProductDocument).filter((doc): doc is VendorProductDocument => doc !== null);
+}
+
 export async function findVendorProductById(productId: string): Promise<VendorProductDocument | null> {
   if (!ObjectId.isValid(productId)) {
     return null;

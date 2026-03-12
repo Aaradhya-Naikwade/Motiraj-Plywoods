@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ImagePlus, Trash2, UploadCloud } from "lucide-react";
+import { ImagePlus, Loader2, Trash2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import {
   VENDOR_PRODUCT_ALLOWED_MIME_TYPES,
   VENDOR_PRODUCT_BATCH_MAX_FILES,
+  VENDOR_PRODUCT_BATCH_MAX_TOTAL_BYTES,
   VENDOR_PRODUCT_CATEGORIES,
   VENDOR_PRODUCT_IMAGE_MAX_SIZE_BYTES,
   type VendorProductCategoryKey,
@@ -38,6 +39,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
   const pendingImagesRef = useRef<PendingImage[]>([]);
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [draggedKey, setDraggedKey] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const syncInputFiles = (files: File[]) => {
     if (!inputRef.current) {
@@ -52,6 +54,10 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
   };
 
   const addFiles = (incomingFiles: File[]) => {
+    if (isSubmitting) {
+      return;
+    }
+
     if (incomingFiles.length === 0) {
       return;
     }
@@ -75,7 +81,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
         if (knownKeys.has(key)) {
           continue;
         }
-
+        
         if (next.length >= VENDOR_PRODUCT_BATCH_MAX_FILES) {
           toast.error(`You can add up to ${VENDOR_PRODUCT_BATCH_MAX_FILES} images in one batch.`);
           break;
@@ -88,6 +94,15 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
           previewUrl: URL.createObjectURL(file),
           categoryKey: null,
         });
+
+        const totalBytes = next.reduce((sum, image) => sum + image.file.size, 0);
+        if (totalBytes > VENDOR_PRODUCT_BATCH_MAX_TOTAL_BYTES) {
+          URL.revokeObjectURL(next[next.length - 1].previewUrl);
+          next.pop();
+          knownKeys.delete(key);
+          toast.error(`Total upload size must stay under ${bytesToMb(VENDOR_PRODUCT_BATCH_MAX_TOTAL_BYTES)} MB.`);
+          break;
+        }
       }
 
       syncInputFiles(next.map((image) => image.file));
@@ -96,6 +111,10 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
   };
 
   const removePendingImage = (key: string) => {
+    if (isSubmitting) {
+      return;
+    }
+
     setPendingImages((current) => {
       const target = current.find((image) => image.key === key);
       if (target) {
@@ -109,6 +128,10 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
   };
 
   const assignCategory = (key: string, categoryKey: VendorProductCategoryKey | null) => {
+    if (isSubmitting) {
+      return;
+    }
+
     setPendingImages((current) =>
       current.map((image) => (image.key === key ? { ...image, categoryKey } : image))
     );
@@ -117,6 +140,10 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
   const handleDropToCategory = (event: React.DragEvent<HTMLDivElement>, categoryKey: VendorProductCategoryKey | null) => {
     event.preventDefault();
     event.stopPropagation();
+
+    if (isSubmitting) {
+      return;
+    }
 
     const internalKey = event.dataTransfer.getData(INTERNAL_DRAG_KEY);
     if (internalKey) {
@@ -153,6 +180,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
 
   const unassignedCount = pendingImages.filter((image) => !image.categoryKey).length;
   const assignedCount = pendingImages.length - unassignedCount;
+  const totalBatchSizeBytes = pendingImages.reduce((sum, image) => sum + image.file.size, 0);
 
   return (
     <div className="space-y-6">
@@ -166,11 +194,12 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
           </div>
           <button
             type="button"
+            disabled={isSubmitting}
             onClick={() => inputRef.current?.click()}
-            className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90"
+            className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <ImagePlus size={16} />
-            Choose Images
+            {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
+            {isSubmitting ? "Uploading..." : "Choose Images"}
           </button>
         </div>
 
@@ -181,13 +210,25 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
             if (pendingImages.length === 0) {
               event.preventDefault();
               toast.error("Select at least one image before saving.");
+              setIsSubmitting(false);
               return;
             }
 
             if (unassignedCount > 0) {
               event.preventDefault();
               toast.error("Assign every image to a category before saving.");
+              setIsSubmitting(false);
+              return;
             }
+
+            if (totalBatchSizeBytes > VENDOR_PRODUCT_BATCH_MAX_TOTAL_BYTES) {
+              event.preventDefault();
+              toast.error(`Total upload size must stay under ${bytesToMb(VENDOR_PRODUCT_BATCH_MAX_TOTAL_BYTES)} MB.`);
+              setIsSubmitting(false);
+              return;
+            }
+
+            setIsSubmitting(true);
           }}
         >
           <input
@@ -207,8 +248,24 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
               event.preventDefault();
               addFiles(Array.from(event.dataTransfer.files ?? []));
             }}
-            className="rounded-[24px] border border-[#d2c9be] bg-[#efe9e1] p-4 md:p-5"
+            className={`relative rounded-[24px] border border-[#d2c9be] bg-[#efe9e1] p-4 md:p-5 ${
+              isSubmitting ? "pointer-events-none" : ""
+            }`}
           >
+            {isSubmitting ? (
+              <div className="absolute inset-0 z-20 flex items-center justify-center rounded-[24px] bg-[#f6f3ee]/90 backdrop-blur-[2px]">
+                <div className="flex min-w-[260px] items-center gap-4 rounded-2xl border border-[#d7cfc4] bg-white px-5 py-4 shadow-xl">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#efe9e1] text-[var(--primary)]">
+                    <Loader2 size={22} className="animate-spin" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--black)]">Uploading your gallery</p>
+                    <p className="mt-1 text-xs text-[var(--darkgray)]">Please wait while images are being saved.</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-[var(--black)]">Drag and Drop Workspace</p>
@@ -263,7 +320,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                         .map((image) => (
                           <div
                             key={image.key}
-                            draggable
+                            draggable={!isSubmitting}
                             onDragStart={(event) => {
                               setDraggedKey(image.key);
                               event.dataTransfer.setData(INTERNAL_DRAG_KEY, image.key);
@@ -283,8 +340,9 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                               />
                               <button
                                 type="button"
+                                disabled={isSubmitting}
                                 onClick={() => removePendingImage(image.key)}
-                                className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black"
+                                className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 <Trash2 size={15} />
                               </button>
@@ -337,8 +395,8 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                             <div className="grid gap-2 sm:grid-cols-2">
                               {categoryImages.map((image) => (
                                 <div
-                                  key={image.key}
-                                  draggable
+                                key={image.key}
+                                  draggable={!isSubmitting}
                                   onDragStart={(event) => {
                                     setDraggedKey(image.key);
                                     event.dataTransfer.setData(INTERNAL_DRAG_KEY, image.key);
@@ -358,8 +416,9 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                                     />
                                     <button
                                       type="button"
+                                      disabled={isSubmitting}
                                       onClick={() => removePendingImage(image.key)}
-                                      className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black"
+                                      className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                       <Trash2 size={13} />
                                     </button>
@@ -367,8 +426,9 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                                   <p className="mt-1.5 truncate text-[11px] font-medium text-[var(--black)]">{image.file.name}</p>
                                   <button
                                     type="button"
+                                    disabled={isSubmitting}
                                     onClick={() => assignCategory(image.key, null)}
-                                    className="mt-1 text-[10px] font-medium text-[var(--primary)] transition hover:opacity-80"
+                                    className="mt-1 text-[10px] font-medium text-[var(--primary)] transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
                                   >
                                     Move back
                                   </button>
@@ -394,10 +454,11 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
             </div>
             <button
               type="submit"
-              disabled={pendingImages.length === 0 || unassignedCount > 0}
-              className="inline-flex items-center justify-center rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isSubmitting || pendingImages.length === 0 || unassignedCount > 0}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Save Categorized Images
+              {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : null}
+              {isSubmitting ? "Uploading Images..." : "Save Categorized Images"}
             </button>
           </div>
         </form>

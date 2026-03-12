@@ -8,10 +8,12 @@ import {
   ChevronRight,
   Crown,
   Eye,
+  Heart,
   LayoutDashboard,
   LogOut,
   Mail,
   Package,
+  Share2,
   Search,
   SquarePen,
   Store,
@@ -19,17 +21,23 @@ import {
   X,
 } from "lucide-react";
 
-type TabId = "overview" | "vendors" | "products" | "leads" | "leaders";
+type TabId = "overview" | "vendors" | "products" | "catalogues" | "likes" | "leads" | "leaders";
 
 export type VendorRow = {
   id: string;
   name: string;
   owner: string;
+  catalogueSlug: string;
   address: string;
   products: number;
   joined: string;
   renewalDue: string;
   renewedOn: string;
+  catalogueShares: number;
+  catalogueViews: number;
+  lastSharedAt: string;
+  lastViewedAt: string;
+  totalLikes: number;
   status: "Active" | "Inactive" | "Locked" | "Pending";
   mobile: string;
   email: string;
@@ -43,6 +51,7 @@ export type ProductRow = {
   imageName: string;
   vendor: string;
   image: string;
+  likes: number;
   hidden: boolean;
 };
 
@@ -110,12 +119,14 @@ const tabs: Array<{ id: TabId; label: string; icon: typeof LayoutDashboard }> = 
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "vendors", label: "Vendors", icon: Store },
   { id: "products", label: "Products", icon: Package },
+  { id: "catalogues", label: "Catalogue", icon: Share2 },
+  { id: "likes", label: "Likes", icon: Heart },
   { id: "leads", label: "Leads", icon: Mail },
   { id: "leaders", label: "Leaders", icon: Crown },
 ];
 
 function normalizeTab(input?: string): TabId {
-  if (input === "vendors" || input === "products" || input === "leads" || input === "leaders") {
+  if (input === "vendors" || input === "products" || input === "catalogues" || input === "likes" || input === "leads" || input === "leaders") {
     return input;
   }
   return "overview";
@@ -190,6 +201,8 @@ export default function AdminDashboardClient({
   const [vendorFilter, setVendorFilter] = useState<"All" | "Active" | "Inactive" | "Locked" | "Pending">("All");
   const [productSearch, setProductSearch] = useState("");
   const [productFilter, setProductFilter] = useState<"All" | "Visible" | "Hidden">("All");
+  const [catalogueSearch, setCatalogueSearch] = useState("");
+  const [likesSearch, setLikesSearch] = useState("");
   const [vendors, setVendors] = useState(initialVendors);
   const [products, setProducts] = useState(initialProducts);
   const [leads, setLeads] = useState(initialLeads);
@@ -204,6 +217,8 @@ export default function AdminDashboardClient({
   const [actionError, setActionError] = useState<string | null>(null);
   const [vendorPage, setVendorPage] = useState(1);
   const [productPage, setProductPage] = useState(1);
+  const [cataloguePage, setCataloguePage] = useState(1);
+  const [likesPage, setLikesPage] = useState(1);
   const [leadPage, setLeadPage] = useState(1);
   const dobMaxDate = new Date();
   dobMaxDate.setFullYear(dobMaxDate.getFullYear() - 18);
@@ -236,6 +251,14 @@ export default function AdminDashboardClient({
   useEffect(() => {
     setProductPage(1);
   }, [productSearch, productFilter]);
+
+  useEffect(() => {
+    setCataloguePage(1);
+  }, [catalogueSearch]);
+
+  useEffect(() => {
+    setLikesPage(1);
+  }, [likesSearch]);
 
   useEffect(() => {
     setLeadPage(1);
@@ -272,12 +295,42 @@ export default function AdminDashboardClient({
     return matchesFilter && matchesSearch;
   });
 
+  const filteredCatalogueVendors = vendors.filter((vendor) => {
+    const query = catalogueSearch.trim().toLowerCase();
+    return (
+      query.length === 0 ||
+      vendor.name.toLowerCase().includes(query) ||
+      vendor.owner.toLowerCase().includes(query) ||
+      vendor.catalogueSlug.toLowerCase().includes(query)
+    );
+  });
+
+  const filteredLikedProducts = products.filter((product) => {
+    const query = likesSearch.trim().toLowerCase();
+    return (
+      product.likes > 0 &&
+      (
+        query.length === 0 ||
+        product.vendor.toLowerCase().includes(query) ||
+        product.category.toLowerCase().includes(query) ||
+        product.imageName.toLowerCase().includes(query)
+      )
+    );
+  }).sort((a, b) => b.likes - a.likes);
+  const totalLikedImages = filteredLikedProducts.length;
+  const totalLikeVotes = filteredLikedProducts.reduce((sum, product) => sum + product.likes, 0);
+  const topLikedProductVotes = filteredLikedProducts[0]?.likes ?? 0;
+
   const vendorTotalPages = Math.max(1, Math.ceil(filteredVendors.length / PAGE_SIZE));
   const productTotalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
+  const catalogueTotalPages = Math.max(1, Math.ceil(filteredCatalogueVendors.length / PAGE_SIZE));
+  const likesTotalPages = Math.max(1, Math.ceil(filteredLikedProducts.length / PAGE_SIZE));
   const leadTotalPages = Math.max(1, Math.ceil(leads.length / PAGE_SIZE));
 
   const paginatedVendors = filteredVendors.slice((vendorPage - 1) * PAGE_SIZE, vendorPage * PAGE_SIZE);
   const paginatedProducts = filteredProducts.slice((productPage - 1) * PAGE_SIZE, productPage * PAGE_SIZE);
+  const paginatedCatalogueVendors = filteredCatalogueVendors.slice((cataloguePage - 1) * PAGE_SIZE, cataloguePage * PAGE_SIZE);
+  const paginatedLikedProducts = filteredLikedProducts.slice((likesPage - 1) * PAGE_SIZE, likesPage * PAGE_SIZE);
   const paginatedLeads = leads.slice((leadPage - 1) * PAGE_SIZE, leadPage * PAGE_SIZE);
 
   function updateVendorField<K extends keyof VendorRow>(field: K, value: VendorRow[K]) {
@@ -616,9 +669,13 @@ export default function AdminDashboardClient({
                     ? "Overview"
                     : selectedTab === "vendors"
                       ? "Vendor Management"
-                      : selectedTab === "products"
+                    : selectedTab === "products"
                         ? "Product Management"
-                        : selectedTab === "leads"
+                      : selectedTab === "catalogues"
+                        ? "Catalogue Sharing"
+                      : selectedTab === "likes"
+                        ? "Likes Board"
+                      : selectedTab === "leads"
                           ? "Lead Inbox"
                           : "Industry Leaders"}
                 </h2>
@@ -794,6 +851,180 @@ export default function AdminDashboardClient({
                 </table>
               </div>
               <Pagination page={vendorPage} totalPages={vendorTotalPages} onPageChange={setVendorPage} />
+            </div>
+          ) : null}
+
+          {selectedTab === "catalogues" ? (
+            <div className="rounded-[28px] border border-white/75 bg-white/92 p-6 shadow-xl">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-[var(--black)]">Catalogue Sharing</h3>
+                  <p className="mt-1 text-sm text-[var(--darkgray)]">
+                    Review each vendor catalogue link, share clicks, and customer visits.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <label className="relative min-w-[260px] flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--darkgray)]" />
+                  <input
+                    value={catalogueSearch}
+                    onChange={(event) => setCatalogueSearch(event.target.value)}
+                    placeholder="Search vendor, owner, or catalogue slug"
+                    className="w-full rounded-2xl border border-[var(--lightgray)] bg-white py-3 pl-10 pr-4 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)]"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-6 overflow-x-auto">
+                <table className="min-w-full border-separate border-spacing-y-3">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide text-[var(--darkgray)]">
+                      <th className="px-4 py-2 font-medium">Vendor</th>
+                      <th className="px-4 py-2 font-medium">Catalogue Slug</th>
+                      <th className="px-4 py-2 font-medium">Shares</th>
+                      <th className="px-4 py-2 font-medium">Views</th>
+                      <th className="px-4 py-2 font-medium">Last Shared</th>
+                      <th className="px-4 py-2 font-medium">Last Viewed</th>
+                      <th className="px-4 py-2 font-medium">Status</th>
+                      <th className="px-4 py-2 font-medium">Link</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedCatalogueVendors.map((vendor) => (
+                      <tr key={vendor.id} className="bg-[var(--secondary)]/35">
+                        <td className="rounded-l-2xl px-4 py-4">
+                          <p className="font-semibold text-[var(--black)]">{vendor.name}</p>
+                          <p className="mt-1 text-sm text-[var(--darkgray)]">{vendor.owner}</p>
+                        </td>
+                        <td className="px-4 py-4 text-sm text-[var(--black)]">{vendor.catalogueSlug}</td>
+                        <td className="px-4 py-4 text-sm text-[var(--black)]">{vendor.catalogueShares}</td>
+                        <td className="px-4 py-4 text-sm text-[var(--black)]">{vendor.catalogueViews}</td>
+                        <td className="px-4 py-4 text-sm text-[var(--black)]">{vendor.lastSharedAt}</td>
+                        <td className="px-4 py-4 text-sm text-[var(--black)]">{vendor.lastViewedAt}</td>
+                        <td className="px-4 py-4">
+                          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusPill(vendor.status)}`}>
+                            {vendor.status}
+                          </span>
+                        </td>
+                        <td className="rounded-r-2xl px-4 py-4">
+                          <a
+                            href={`/vendor/catalogue/${vendor.catalogueSlug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2 text-sm font-medium text-[var(--black)] transition hover:bg-[var(--secondary)]"
+                          >
+                            <Eye size={14} />
+                            Open
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination page={cataloguePage} totalPages={catalogueTotalPages} onPageChange={setCataloguePage} />
+            </div>
+          ) : null}
+
+          {selectedTab === "likes" ? (
+            <div className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-[28px] border border-white/75 bg-white/92 p-5 shadow-xl">
+                  <p className="text-xs uppercase tracking-[0.22em] text-[var(--darkgray)]">Liked Images</p>
+                  <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{totalLikedImages}</p>
+                </div>
+                <div className="rounded-[28px] border border-white/75 bg-white/92 p-5 shadow-xl">
+                  <p className="text-xs uppercase tracking-[0.22em] text-[var(--darkgray)]">Total Likes</p>
+                  <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{totalLikeVotes}</p>
+                </div>
+                <div className="rounded-[28px] border border-white/75 bg-white/92 p-5 shadow-xl">
+                  <p className="text-xs uppercase tracking-[0.22em] text-[var(--darkgray)]">Top Image Likes</p>
+                  <p className="mt-3 text-3xl font-semibold text-[var(--black)]">{topLikedProductVotes}</p>
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-white/75 bg-white/92 p-6 shadow-xl">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-semibold text-[var(--black)]">Image Likes Leaderboard</h3>
+                    <p className="mt-1 text-sm text-[var(--darkgray)]">
+                      Ranked view of the most-liked catalogue images across all vendors.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <label className="relative min-w-[260px] flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--darkgray)]" />
+                    <input
+                      value={likesSearch}
+                      onChange={(event) => setLikesSearch(event.target.value)}
+                      placeholder="Search vendor, category, or image name"
+                      className="w-full rounded-2xl border border-[var(--lightgray)] bg-white py-3 pl-10 pr-4 text-sm text-[var(--black)] outline-none transition focus:border-[var(--primary)]"
+                    />
+                  </label>
+                </div>
+
+                {filteredLikedProducts.length === 0 ? (
+                  <div className="mt-6 rounded-3xl border border-dashed border-[var(--lightgray)] bg-white px-6 py-12 text-center">
+                    <p className="text-base font-medium text-[var(--black)]">No liked images yet.</p>
+                    <p className="mt-2 text-sm text-[var(--darkgray)]">
+                      This tab will populate as visitors start liking catalogue images.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mt-6 overflow-x-auto">
+                      <table className="min-w-full border-separate border-spacing-y-3">
+                        <thead>
+                          <tr className="text-left text-xs uppercase tracking-wide text-[var(--darkgray)]">
+                            <th className="px-4 py-2 font-medium">Rank</th>
+                            <th className="px-4 py-2 font-medium">Image</th>
+                            <th className="px-4 py-2 font-medium">Vendor</th>
+                            <th className="px-4 py-2 font-medium">Category</th>
+                            <th className="px-4 py-2 font-medium">Likes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginatedLikedProducts.map((product, index) => (
+                            <tr key={product.id} className="bg-[var(--secondary)]/35">
+                              <td className="rounded-l-2xl px-4 py-4">
+                                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-semibold text-[var(--black)] shadow-sm">
+                                  {(likesPage - 1) * PAGE_SIZE + index + 1}
+                                </span>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="flex items-center gap-3">
+                                  <img
+                                    src={product.image}
+                                    alt={product.imageName}
+                                    className="h-14 w-14 rounded-2xl object-cover"
+                                  />
+                                  <div>
+                                    <p className="font-semibold text-[var(--black)]">{product.imageName}</p>
+                                    <p className="mt-1 text-xs text-[var(--darkgray)]">Catalogue image</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4 text-sm text-[var(--black)]">{product.vendor}</td>
+                              <td className="px-4 py-4 text-sm text-[var(--black)]">{product.category}</td>
+                              <td className="rounded-r-2xl px-4 py-4">
+                                <span className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-700">
+                                  <Heart size={14} className="fill-current" />
+                                  {product.likes}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <Pagination page={likesPage} totalPages={likesTotalPages} onPageChange={setLikesPage} />
+                  </>
+                )}
+              </div>
             </div>
           ) : null}
 
@@ -1151,6 +1382,16 @@ export default function AdminDashboardClient({
               <div className="rounded-xl border border-[var(--lightgray)] bg-[var(--secondary)] px-3 py-2.5">
                 <span className="mb-1 block text-sm font-medium text-[var(--black)]">Products</span>
                 <p className="text-sm text-[var(--darkgray)]">{editingVendor.products} products linked to this vendor</p>
+              </div>
+              <div className="rounded-xl border border-[var(--lightgray)] bg-[var(--secondary)] px-3 py-2.5 md:col-span-2">
+                <span className="mb-1 block text-sm font-medium text-[var(--black)]">Catalogue Analytics</span>
+                <div className="grid gap-2 text-sm text-[var(--darkgray)] md:grid-cols-2">
+                  <p><span className="font-medium text-[var(--black)]">Slug:</span> {editingVendor.catalogueSlug}</p>
+                  <p><span className="font-medium text-[var(--black)]">Shares:</span> {editingVendor.catalogueShares}</p>
+                  <p><span className="font-medium text-[var(--black)]">Views:</span> {editingVendor.catalogueViews}</p>
+                  <p><span className="font-medium text-[var(--black)]">Last Shared:</span> {editingVendor.lastSharedAt}</p>
+                  <p><span className="font-medium text-[var(--black)]">Last Viewed:</span> {editingVendor.lastViewedAt}</p>
+                </div>
               </div>
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-[var(--black)]">Mobile</span>

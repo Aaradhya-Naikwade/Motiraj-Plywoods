@@ -2,6 +2,7 @@ import Image from "next/image";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { findVendorById, setVendorStatus } from "@/lib/vendor-repo";
+import { getLikeCountsByProductIds } from "@/lib/vendor-product-likes";
 import { findVendorProductsByVendorId } from "@/lib/vendor-product-repo";
 import { getVendorProductCategoryLabel, VENDOR_PRODUCT_CATEGORIES } from "@/lib/vendor-product-categories";
 import { isVendorRenewalExpired } from "@/lib/vendor-renewal";
@@ -10,17 +11,21 @@ import {
   vendorCreateCategorizedProductsAction,
   vendorDeleteProductAction,
   vendorLogoutAction,
+  vendorTrackCatalogueShareAction,
   vendorUpdateProfileAction,
 } from "../actions";
 import DashboardAlerts from "./DashboardAlerts";
 import ConfirmSubmitButton from "@/components/ConfirmSubmitButton";
-import { Building2, CalendarDays, MapPin, Phone, User } from "lucide-react";
+import { Building2, CalendarDays, Heart, MapPin, Phone, User } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import ProductCategoryManager from "./ProductCategoryManager";
+import VendorCatalogueTools from "./VendorCatalogueTools";
 
 type VendorDashboardPageProps = {
   searchParams: Promise<{ status?: string; error?: string; tab?: string; mode?: string }>;
 };
+
+type VendorDashboardTab = "profile" | "add-products" | "manage-products";
 
 function fmtDate(date: Date | null) {
   return date
@@ -121,8 +126,14 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
   }
 
   const products = await findVendorProductsByVendorId(vendor._id.toString());
+  const likeCounts = await getLikeCountsByProductIds(products.map((product) => product._id.toString()));
   const params = await searchParams;
-  const activeTab = params.tab === "products" ? "products" : "profile";
+  const activeTab: VendorDashboardTab =
+    params.tab === "manage-products"
+      ? "manage-products"
+      : params.tab === "add-products" || params.tab === "products"
+        ? "add-products"
+        : "profile";
   const isProfileEditMode = activeTab === "profile" && params.mode === "edit";
   const profileViewUrl = "/vendor/dashboard?tab=profile";
   const profileEditUrl = "/vendor/dashboard?tab=profile&mode=edit";
@@ -134,12 +145,21 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
     ...category,
     items: products.filter((product) => product.category_key === category.key),
   })).filter((category) => category.items.length > 0);
+  const categoriesUsedCount = groupedProducts.length;
+  const totalLikesCount = products.reduce((sum, product) => sum + (likeCounts.get(product._id.toString()) ?? 0), 0);
 
   return (
     <section className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#f7f2eb_0%,_#efe6dc_42%,_#e6dacc_100%)] px-4 py-8 md:px-8 md:py-10">
       <DashboardAlerts status={params.status} error={params.error} />
 
       <div className="mx-auto max-w-6xl space-y-6">
+        <VendorCatalogueTools
+          cataloguePath={`/vendor/catalogue/${vendor.catalogue_slug}`}
+          companyName={vendor.company_name}
+          hasProducts={products.length > 0}
+          onTrackShareAction={vendorTrackCatalogueShareAction}
+        />
+
         <div className="rounded-3xl border border-white/70 bg-white/90 p-6 shadow-xl backdrop-blur md:p-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -191,15 +211,51 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
               Profile
             </a>
             <a
-              href="/vendor/dashboard?tab=products"
+              href="/vendor/dashboard?tab=add-products"
               className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-                activeTab === "products"
+                activeTab === "add-products"
                   ? "bg-white text-[var(--black)] shadow-sm"
                   : "text-[var(--darkgray)] hover:text-[var(--black)]"
               }`}
             >
-              Products
+              Add Products
             </a>
+            <a
+              href="/vendor/dashboard?tab=manage-products"
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+                activeTab === "manage-products"
+                  ? "bg-white text-[var(--black)] shadow-sm"
+                  : "text-[var(--darkgray)] hover:text-[var(--black)]"
+              }`}
+            >
+              Manage Products
+            </a>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(260px,1.15fr)]">
+            <div className="rounded-[24px] border border-[var(--lightgray)] bg-white px-4 py-4 shadow-sm">
+              <p className="text-xs uppercase tracking-[0.22em] text-[var(--darkgray)]">Total Images Uploaded</p>
+              <p className="mt-2 text-3xl font-semibold text-[var(--black)]">{products.length}</p>
+              <p className="mt-1 text-xs text-[var(--darkgray)]">All catalogue images currently uploaded</p>
+            </div>
+            <div className="rounded-[24px] border border-[var(--lightgray)] bg-white px-4 py-4 shadow-sm">
+              <p className="text-xs uppercase tracking-[0.22em] text-[var(--darkgray)]">Categories Used</p>
+              <p className="mt-2 text-3xl font-semibold text-[var(--black)]">{categoriesUsedCount}</p>
+              <p className="mt-1 text-xs text-[var(--darkgray)]">Unique sections currently filled in your catalogue</p>
+            </div>
+            <div className="relative overflow-hidden rounded-[24px] border border-rose-200 bg-[#fff4f7] px-4 py-4 shadow-[0_18px_40px_-32px_rgba(180,35,77,0.5)] sm:col-span-2 lg:col-span-1">
+              <div className="absolute right-0 top-0 h-24 w-24 rounded-full bg-rose-200/40 blur-2xl" />
+              <div className="relative flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-rose-600">Total Catalogue Likes</p>
+                  <p className="mt-2 text-3xl font-semibold text-[#2b1420]">{totalLikesCount}</p>
+                  <p className="mt-1 text-xs text-rose-700/80">Live engagement across all your catalogue images</p>
+                </div>
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-rose-600 shadow-sm">
+                  <Heart size={20} className="fill-current" />
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -350,9 +406,12 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
               </div>
             </form>
           </div>
-        ) : (
+        ) : activeTab === "add-products" ? (
           <div className="space-y-6">
             <ProductCategoryManager saveAction={vendorCreateCategorizedProductsAction} />
+          </div>
+        ) : (
+          <div className="space-y-6">
 
             <div className="rounded-[28px] border border-white/80 bg-white/95 p-6 shadow-xl">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -366,6 +425,19 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
                   {products.length} live images
                 </span>
               </div>
+
+              {groupedProducts.length > 0 ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {groupedProducts.map((group) => (
+                    <span
+                      key={group.key}
+                      className="rounded-full border border-[var(--lightgray)] bg-[var(--secondary)] px-3 py-1 text-xs font-medium text-[var(--black)]"
+                    >
+                      {getVendorProductCategoryLabel(group.key)}: {group.items.length}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
 
               {groupedProducts.length === 0 ? (
                 <div className="mt-5 rounded-2xl border border-dashed border-[#c8b79f] bg-white/80 p-8 text-center text-[var(--darkgray)]">
@@ -391,18 +463,23 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
                           <div key={product._id.toString()} className="rounded-2xl border border-white/80 bg-white p-3 shadow-sm">
                             <Image
                               src={product.image_url || "/image/plywood.png"}
-                              alt={product.image_name}
+                              alt={getVendorProductCategoryLabel(product.category_key)}
                               width={420}
                               height={280}
                               className="h-44 w-full rounded-xl object-cover"
                             />
-                            <p className="mt-3 truncate text-sm font-semibold text-[var(--black)]">{product.image_name}</p>
                             <div className="mt-3 flex items-center justify-between gap-2">
-                              <span className="rounded-full bg-[var(--secondary)] px-3 py-1 text-[11px] font-medium text-[var(--black)]">
-                                {getVendorProductCategoryLabel(product.category_key)}
-                              </span>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-full bg-[var(--secondary)] px-3 py-1 text-[11px] font-medium text-[var(--black)]">
+                                  {getVendorProductCategoryLabel(product.category_key)}
+                                </span>
+                                <span className="rounded-full border border-[#f2c9d3] bg-[#fff1f5] px-3 py-1 text-[11px] font-medium text-[#b4234d]">
+                                  {likeCounts.get(product._id.toString()) ?? 0} likes
+                                </span>
+                              </div>
                               <form action={vendorDeleteProductAction}>
                                 <input type="hidden" name="productId" value={product._id.toString()} />
+                                <input type="hidden" name="returnTab" value="manage-products" />
                                 <ConfirmSubmitButton
                                   confirmMessage="Are you sure you want to delete this image?"
                                   className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"

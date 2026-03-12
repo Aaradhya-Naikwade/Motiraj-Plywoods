@@ -18,6 +18,7 @@ export const VENDOR_PRODUCT_CATEGORY_KEYS = VENDOR_PRODUCT_CATEGORIES.map((categ
 export const VENDOR_PRODUCT_ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export const VENDOR_PRODUCT_IMAGE_MAX_SIZE_BYTES = 8 * 1024 * 1024;
 export const VENDOR_PRODUCT_BATCH_MAX_FILES = 40;
+export const VENDOR_PRODUCT_BATCH_MAX_TOTAL_BYTES = 90 * 1024 * 1024;
 
 export function isVendorProductCategoryKey(value: string): value is VendorProductCategoryKey {
   return VENDOR_PRODUCT_CATEGORY_KEYS.includes(value as VendorProductCategoryKey);

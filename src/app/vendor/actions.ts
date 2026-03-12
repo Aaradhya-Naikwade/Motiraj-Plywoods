@@ -7,6 +7,7 @@ import { MongoServerError } from "mongodb";
 import { createHash } from "crypto";
 import { VENDOR_AUTH_COOKIE, VENDOR_SESSION_TTL_SECONDS, createVendorSessionToken, hashPassword, isStrongPassword, isValidMobile, normalizeMobile, verifyPassword, verifyVendorSessionToken } from "@/lib/vendor-auth";
 import { createVendor, findVendorById, findVendorByMobile, setVendorStatus, updateVendorLastLogin, updateVendorProfile } from "@/lib/vendor-repo";
+import { incrementVendorCatalogueShareClick } from "@/lib/vendor-repo";
 import { createVendorProducts, deleteVendorProduct, getVendorProductImageUrls } from "@/lib/vendor-product-repo";
 import { removeUploadedImages } from "@/lib/vendor-product-images";
 import { isVendorRenewalExpired } from "@/lib/vendor-renewal";
@@ -422,14 +423,22 @@ export async function vendorCreateCategorizedProductsAction(formData: FormData) 
 export async function vendorDeleteProductAction(formData: FormData) {
   const vendor = await getAuthenticatedVendorOrRedirect();
   const productId = String(formData.get("productId") ?? "");
+  const returnTab = String(formData.get("returnTab") ?? "manage-products");
+  const nextTab = returnTab === "add-products" || returnTab === "profile" ? returnTab : "manage-products";
 
   const deletedProduct = await deleteVendorProduct(productId, vendor._id.toString());
   if (!deletedProduct) {
-    redirect("/vendor/dashboard?tab=products&error=product_not_found");
+    redirect(`/vendor/dashboard?tab=${nextTab}&error=product_not_found`);
   }
 
   await removeUploadedImages(getVendorProductImageUrls(deletedProduct));
   revalidatePath("/vendor");
   revalidatePath("/admin/dashboard");
-  redirect("/vendor/dashboard?tab=products&status=product_deleted");
+  redirect(`/vendor/dashboard?tab=${nextTab}&status=product_deleted`);
+}
+
+export async function vendorTrackCatalogueShareAction() {
+  const vendor = await getAuthenticatedVendorOrRedirect();
+  await incrementVendorCatalogueShareClick(vendor._id.toString());
+  return { ok: true };
 }

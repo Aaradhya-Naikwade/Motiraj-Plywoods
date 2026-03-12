@@ -10,24 +10,49 @@ export default async function VendorPage() {
   const vendors = await findVendorsByIds(vendorIds);
   const vendorMap = new Map(vendors.map((vendor) => [vendor._id.toString(), vendor]));
 
-  const productList = products
-    .map((product) => {
-      const owner = vendorMap.get(product.vendor_id.toString());
-      if (!owner || owner.status !== "active") {
-        return null;
-      }
+  const vendorCatalogueMap = new Map<
+    string,
+    {
+      id: string;
+      vendorName: string;
+      vendorMobile: string;
+      vendorWhatsapp: string | null;
+      catalogueSlug: string;
+      imageUrl: string;
+      imageCount: number;
+      categories: string[];
+    }
+  >();
 
-      return {
-        id: product._id.toString(),
-        category: getVendorProductCategoryLabel(product.category_key),
-        imageName: product.image_name,
-        imageUrl: product.image_url,
-        vendorName: owner.company_name,
-        vendorMobile: owner.mobile,
-        vendorWhatsapp: owner.whatsapp_number,
-      };
-    })
-    .filter((item): item is NonNullable<typeof item> => item !== null);
+  for (const product of products) {
+    const owner = vendorMap.get(product.vendor_id.toString());
+    if (!owner || owner.status !== "active") {
+      continue;
+    }
+
+    const categoryLabel = getVendorProductCategoryLabel(product.category_key);
+    const existing = vendorCatalogueMap.get(owner._id.toString());
+    if (existing) {
+      existing.imageCount += 1;
+      if (!existing.categories.includes(categoryLabel)) {
+        existing.categories.push(categoryLabel);
+      }
+      continue;
+    }
+
+    vendorCatalogueMap.set(owner._id.toString(), {
+      id: owner._id.toString(),
+      vendorName: owner.company_name,
+      vendorMobile: owner.mobile,
+      vendorWhatsapp: owner.whatsapp_number,
+      catalogueSlug: owner.catalogue_slug,
+      imageUrl: product.image_url,
+      imageCount: 1,
+      categories: [categoryLabel],
+    });
+  }
+
+  const productList = Array.from(vendorCatalogueMap.values());
 
   return (
     <>

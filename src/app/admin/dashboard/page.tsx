@@ -14,6 +14,7 @@ import { ADMIN_AUTH_COOKIE } from "@/lib/admin-auth";
 import { getIndustryLeadersForAdmin } from "@/lib/industry-leaders-repo";
 import { findAllLeads } from "@/lib/lead-repo";
 import { getVendorProductCategoryLabel } from "@/lib/vendor-product-categories";
+import { getLikeCountsByProductIds, getTotalLikesByVendorIds } from "@/lib/vendor-product-likes";
 import { findAllVendors, setVendorStatus } from "@/lib/vendor-repo";
 import { findAllVendorProducts } from "@/lib/vendor-product-repo";
 import { getVendorRenewalDate, isVendorRenewalExpired } from "@/lib/vendor-renewal";
@@ -86,6 +87,10 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
   }
 
   const vendorNameById = new Map(vendors.map((vendor) => [vendor._id.toString(), vendor.company_name]));
+  const [productLikeCounts, vendorLikeTotals] = await Promise.all([
+    getLikeCountsByProductIds(products.map((product) => product._id.toString())),
+    getTotalLikesByVendorIds(vendors.map((vendor) => vendor._id.toString())),
+  ]);
 
   const initialVendors: VendorRow[] = vendors.map((vendor) => {
     const renewedOn =
@@ -98,11 +103,17 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
       id: vendor._id.toString(),
       name: vendor.company_name,
       owner: vendor.name,
+      catalogueSlug: vendor.catalogue_slug,
       address: vendor.address ?? "-",
       products: productCountByVendorId.get(vendor._id.toString()) ?? 0,
       joined: formatDate(vendor.created_at),
       renewalDue: formatDate(getVendorRenewalDate(vendor)),
       renewedOn,
+      catalogueShares: vendor.catalogue_share_click_count ?? 0,
+      catalogueViews: vendor.catalogue_view_count ?? 0,
+      lastSharedAt: formatDate(vendor.last_shared_at),
+      lastViewedAt: formatDate(vendor.last_viewed_at),
+      totalLikes: vendorLikeTotals.get(vendor._id.toString()) ?? 0,
       status: toAdminVendorStatus(vendor.status),
       mobile: vendor.mobile,
       email: vendor.email,
@@ -117,6 +128,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
     imageName: product.image_name,
     vendor: vendorNameById.get(product.vendor_id.toString()) ?? "Unknown Vendor",
     image: product.image_url || "/image/plywood.png",
+    likes: productLikeCounts.get(product._id.toString()) ?? 0,
     hidden: product.hidden ?? false,
   }));
 

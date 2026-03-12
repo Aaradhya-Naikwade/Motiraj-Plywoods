@@ -1,5 +1,6 @@
 import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/mongodb";
+import { buildVendorCatalogueSlug } from "@/lib/vendor-catalogue";
 
 export type VendorStatus = "active" | "inactive" | "pending" | "blocked" | "locked";
 
@@ -7,6 +8,7 @@ export type VendorDocument = {
   _id: ObjectId;
   name: string;
   company_name: string;
+  catalogue_slug: string;
   address: string | null;
   mobile: string;
   whatsapp_number: string | null;
@@ -15,6 +17,10 @@ export type VendorDocument = {
   password_hash: string;
   password_salt: string;
   status: VendorStatus;
+  catalogue_share_click_count: number;
+  catalogue_view_count: number;
+  last_shared_at: Date | null;
+  last_viewed_at: Date | null;
   created_at: Date;
   renewal_started_at: Date | null;
   last_login: Date | null;
@@ -35,6 +41,17 @@ type CreateVendorInput = {
 
 type VendorDbDocument = Omit<VendorDocument, "_id"> & { _id?: ObjectId };
 
+function normalizeVendorDocument(doc: VendorDbDocument & { _id: ObjectId }): VendorDocument {
+  return {
+    ...doc,
+    catalogue_slug: doc.catalogue_slug || buildVendorCatalogueSlug(doc.company_name, doc.mobile),
+    catalogue_share_click_count: doc.catalogue_share_click_count ?? 0,
+    catalogue_view_count: doc.catalogue_view_count ?? 0,
+    last_shared_at: doc.last_shared_at ?? null,
+    last_viewed_at: doc.last_viewed_at ?? null,
+  };
+}
+
 let indexesReadyPromise: Promise<void> | null = null;
 
 async function ensureVendorIndexes(): Promise<void> {
@@ -42,6 +59,37 @@ async function ensureVendorIndexes(): Promise<void> {
     indexesReadyPromise = (async () => {
       const db = await getDb();
       const collection = db.collection<VendorDbDocument>("vendors");
+      const vendorsMissingCatalogueFields = await collection
+        .find({
+          $or: [
+            { catalogue_slug: { $exists: false } },
+            { catalogue_share_click_count: { $exists: false } },
+            { catalogue_view_count: { $exists: false } },
+            { last_shared_at: { $exists: false } },
+            { last_viewed_at: { $exists: false } },
+          ],
+        })
+        .toArray();
+
+      await Promise.all(
+        vendorsMissingCatalogueFields
+          .filter((vendor): vendor is VendorDbDocument & { _id: ObjectId } => Boolean(vendor._id))
+          .map((vendor) =>
+            collection.updateOne(
+              { _id: vendor._id },
+              {
+                $set: {
+                  catalogue_slug: vendor.catalogue_slug || buildVendorCatalogueSlug(vendor.company_name, vendor.mobile),
+                  catalogue_share_click_count: vendor.catalogue_share_click_count ?? 0,
+                  catalogue_view_count: vendor.catalogue_view_count ?? 0,
+                  last_shared_at: vendor.last_shared_at ?? null,
+                  last_viewed_at: vendor.last_viewed_at ?? null,
+                },
+              }
+            )
+          )
+      );
+
       const existingIndexes = await collection.indexes();
       const legacySparseEmailIndex = existingIndexes.find(
         (index) =>
@@ -85,6 +133,22 @@ async function ensureVendorIndexes(): Promise<void> {
           { unique: true, name: "vendors_email_unique_idx" }
         );
       }
+
+      const catalogueSlugIndex = existingIndexes.find((index) => index.key?.catalogue_slug === 1);
+      const hasCompatibleCatalogueSlugIndex =
+        catalogueSlugIndex &&
+        catalogueSlugIndex.unique === true &&
+        (catalogueSlugIndex as { sparse?: boolean }).sparse !== true;
+
+      if (!hasCompatibleCatalogueSlugIndex) {
+        if (catalogueSlugIndex?.name) {
+          await collection.dropIndex(catalogueSlugIndex.name);
+        }
+        await collection.createIndex(
+          { catalogue_slug: 1 },
+          { unique: true, name: "vendors_catalogue_slug_unique_idx" }
+        );
+      }
     })();
   }
   return indexesReadyPromise;
@@ -102,7 +166,7 @@ export async function findVendorByMobile(mobile: string): Promise<VendorDocument
   if (!doc?._id) {
     return null;
   }
-  return doc as VendorDocument;
+  return normalizeVendorDocument(doc as VendorDbDocument & { _id: ObjectId });
 }
 
 export async function findVendorByEmail(email: string): Promise<VendorDocument | null> {
@@ -111,7 +175,7 @@ export async function findVendorByEmail(email: string): Promise<VendorDocument |
   if (!doc?._id) {
     return null;
   }
-  return doc as VendorDocument;
+  return normalizeVendorDocument(doc as VendorDbDocument & { _id: ObjectId });
 }
 
 export async function findVendorById(id: string): Promise<VendorDocument | null> {
@@ -123,7 +187,21 @@ export async function findVendorById(id: string): Promise<VendorDocument | null>
   if (!doc?._id) {
     return null;
   }
-  return doc as VendorDocument;
+  return normalizeVendorDocument(doc as VendorDbDocument & { _id: ObjectId });
+}
+
+export async function findVendorByCatalogueSlug(slug: string): Promise<VendorDocument | null> {
+  const normalizedSlug = slug.trim().toLowerCase();
+  if (!normalizedSlug) {
+    return null;
+  }
+
+  const collection = await getVendorCollection();
+  const doc = await collection.findOne({ catalogue_slug: normalizedSlug });
+  if (!doc?._id) {
+    return null;
+  }
+  return normalizeVendorDocument(doc as VendorDbDocument & { _id: ObjectId });
 }
 
 export async function findVendorsByIds(ids: string[]): Promise<VendorDocument[]> {
@@ -137,32 +215,43 @@ export async function findVendorsByIds(ids: string[]): Promise<VendorDocument[]>
   }
 
   const collection = await getVendorCollection();
-  return collection.find({ _id: { $in: objectIds } }).toArray() as Promise<VendorDocument[]>;
+  const docs = await collection.find({ _id: { $in: objectIds } }).toArray();
+  return docs
+    .filter((doc): doc is VendorDbDocument & { _id: ObjectId } => Boolean(doc._id))
+    .map(normalizeVendorDocument);
 }
 
 export async function findAllVendors(): Promise<VendorDocument[]> {
   const collection = await getVendorCollection();
   const docs = await collection.find({}).sort({ created_at: -1 }).toArray();
-  return docs.filter((doc): doc is VendorDocument => Boolean(doc._id));
+  return docs
+    .filter((doc): doc is VendorDbDocument & { _id: ObjectId } => Boolean(doc._id))
+    .map(normalizeVendorDocument);
 }
 
 export async function createVendor(input: CreateVendorInput): Promise<VendorDocument> {
   const collection = await getVendorCollection();
   const now = new Date();
+  const catalogueSlug = buildVendorCatalogueSlug(input.company_name, input.mobile);
 
   const doc: VendorDbDocument = {
     ...input,
+    catalogue_slug: catalogueSlug,
     address: input.address ?? null,
     whatsapp_number: input.whatsapp_number ?? null,
     dob: input.dob ?? null,
     status: input.status ?? "active",
+    catalogue_share_click_count: 0,
+    catalogue_view_count: 0,
+    last_shared_at: null,
+    last_viewed_at: null,
     created_at: now,
     renewal_started_at: now,
     last_login: null,
   };
 
   const result = await collection.insertOne(doc);
-  return { _id: result.insertedId, ...doc } as VendorDocument;
+  return normalizeVendorDocument({ _id: result.insertedId, ...doc });
 }
 
 export async function updateVendorLastLogin(vendorId: string, at = new Date()): Promise<void> {
@@ -200,6 +289,36 @@ export async function updateVendorProfile(
         email: profile.email,
         dob: profile.dob,
       },
+    }
+  );
+}
+
+export async function incrementVendorCatalogueShareClick(vendorId: string): Promise<void> {
+  if (!ObjectId.isValid(vendorId)) {
+    return;
+  }
+
+  const collection = await getVendorCollection();
+  await collection.updateOne(
+    { _id: new ObjectId(vendorId) },
+    {
+      $inc: { catalogue_share_click_count: 1 },
+      $set: { last_shared_at: new Date() },
+    }
+  );
+}
+
+export async function incrementVendorCatalogueView(vendorId: string): Promise<void> {
+  if (!ObjectId.isValid(vendorId)) {
+    return;
+  }
+
+  const collection = await getVendorCollection();
+  await collection.updateOne(
+    { _id: new ObjectId(vendorId) },
+    {
+      $inc: { catalogue_view_count: 1 },
+      $set: { last_viewed_at: new Date() },
     }
   );
 }
@@ -276,5 +395,5 @@ export async function deleteVendorById(vendorId: string): Promise<VendorDocument
   if (!doc?._id) {
     return null;
   }
-  return doc as VendorDocument;
+  return normalizeVendorDocument(doc as VendorDbDocument & { _id: ObjectId });
 }
