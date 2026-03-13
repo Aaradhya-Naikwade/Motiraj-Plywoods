@@ -40,6 +40,11 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [draggedKey, setDraggedKey] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isTouch, setIsTouch] = useState(false);
+  const [isMultiSelect, setIsMultiSelect] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [selectedCategory, setSelectedCategory] = useState<VendorProductCategoryKey | "">("");
+  const longPressTimerRef = useRef<number | null>(null);
 
   const syncInputFiles = (files: File[]) => {
     if (!inputRef.current) {
@@ -137,6 +142,33 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
     );
   };
 
+  const assignCategoryBulk = (keys: string[], categoryKey: VendorProductCategoryKey | null) => {
+    if (isSubmitting || keys.length === 0) {
+      return;
+    }
+
+    const keySet = new Set(keys);
+    setPendingImages((current) =>
+      current.map((image) => (keySet.has(image.key) ? { ...image, categoryKey } : image))
+    );
+  };
+
+  const toggleSelectedKey = (key: string) => {
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedKeys(new Set());
+  };
+
   const handleDropToCategory = (event: React.DragEvent<HTMLDivElement>, categoryKey: VendorProductCategoryKey | null) => {
     event.preventDefault();
     event.stopPropagation();
@@ -163,6 +195,10 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
   }, [pendingImages]);
 
   useEffect(() => {
+    setIsTouch(
+      typeof window !== "undefined" &&
+        ("ontouchstart" in window || window.matchMedia?.("(pointer: coarse)").matches)
+    );
     return () => {
       pendingImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
     };
@@ -181,7 +217,8 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
   const unassignedCount = pendingImages.filter((image) => !image.categoryKey).length;
   const assignedCount = pendingImages.length - unassignedCount;
   const totalBatchSizeBytes = pendingImages.reduce((sum, image) => sum + image.file.size, 0);
-  const completionPercent = pendingImages.length === 0 ? 0 : Math.round((assignedCount / pendingImages.length) * 100);
+  const selectedCount = selectedKeys.size;
+  const canAssignSelected = selectedCount > 0 && selectedCategory !== "";
 
   return (
     <div className="space-y-6">
@@ -225,109 +262,13 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
           />
           <input type="hidden" name="assignments" value={assignmentsValue} />
 
-          <div className="rounded-[28px] bg-[linear-gradient(135deg,#f9f4ee_0%,#f3eadf_100%)] p-5 shadow-sm md:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--primary)]">Add Products</p>
-                <h2 className="mt-2 text-2xl font-semibold text-[var(--black)]">Build your category gallery</h2>
-                <p className="mt-2 max-w-2xl text-sm text-[var(--darkgray)]">
-                  Upload images, drag them into the right category boxes, and save when every image is assigned.
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => inputRef.current?.click()}
-                className="inline-flex items-center gap-2 rounded-2xl bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-white shadow-md transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
-                {isSubmitting ? "Uploading..." : "Choose Images"}
-              </button>
-            </div>
-
-            <div className="mt-5 grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border border-[#eadfd2] bg-white/85 p-4">
-                <div className="flex items-start gap-3">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--secondary)] text-[var(--primary)]">
-                    <UploadCloud size={18} />
-                  </span>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--darkgray)]">Step 1</p>
-                    <p className="mt-1 text-sm font-semibold text-[var(--black)]">Upload images</p>
-                    <p className="mt-1 text-xs text-[var(--darkgray)]">Add up to {VENDOR_PRODUCT_BATCH_MAX_FILES} files in one batch.</p>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-[#eadfd2] bg-white/85 p-4">
-                <div className="flex items-start gap-3">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--secondary)] text-[var(--primary)]">
-                    <Grip size={18} />
-                  </span>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--darkgray)]">Step 2</p>
-                    <p className="mt-1 text-sm font-semibold text-[var(--black)]">Drag to assign</p>
-                    <p className="mt-1 text-xs text-[var(--darkgray)]">Keep drag and drop workflow for quick category sorting.</p>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-[#eadfd2] bg-white/85 p-4">
-                <div className="flex items-start gap-3">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--secondary)] text-[var(--primary)]">
-                    <CheckCircle2 size={18} />
-                  </span>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--darkgray)]">Step 3</p>
-                    <p className="mt-1 text-sm font-semibold text-[var(--black)]">Save gallery</p>
-                    <p className="mt-1 text-xs text-[var(--darkgray)]">Save only after every image is assigned.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl bg-white px-4 py-3 shadow-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--darkgray)]">Selected</p>
-                <p className="mt-1 text-2xl font-semibold text-[var(--black)]">{pendingImages.length}</p>
-              </div>
-              <div className="rounded-2xl bg-white px-4 py-3 shadow-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--darkgray)]">Assigned</p>
-                <p className="mt-1 text-2xl font-semibold text-[var(--black)]">{assignedCount}</p>
-              </div>
-              <div className="rounded-2xl bg-white px-4 py-3 shadow-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--darkgray)]">Unassigned</p>
-                <p className="mt-1 text-2xl font-semibold text-[var(--black)]">{unassignedCount}</p>
-              </div>
-              <div className="rounded-2xl bg-white px-4 py-3 shadow-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--darkgray)]">Batch Size</p>
-                <p className="mt-1 text-2xl font-semibold text-[var(--black)]">{bytesToMb(totalBatchSizeBytes)} MB</p>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-2xl bg-white/85 p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[var(--black)]">Assignment progress</p>
-                  <p className="mt-1 text-xs text-[var(--darkgray)]">Complete all category placements before saving.</p>
-                </div>
-                <span className="rounded-full bg-[var(--secondary)] px-3 py-1 text-xs font-semibold text-[var(--black)]">
-                  {completionPercent}%
-                </span>
-              </div>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#eadfd2]">
-                <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${completionPercent}%` }} />
-              </div>
-            </div>
-          </div>
-
           <div
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
               event.preventDefault();
               addFiles(Array.from(event.dataTransfer.files ?? []));
             }}
-            className={`relative rounded-[28px] border border-[#eee3d7] bg-[#faf7f2] p-4 shadow-sm md:p-5 ${
-              isSubmitting ? "pointer-events-none" : ""
-            }`}
+            className={`relative ${isSubmitting ? "pointer-events-none" : ""}`}
           >
             {isSubmitting ? (
               <div className="absolute inset-0 z-20 flex items-center justify-center rounded-[28px] bg-[#f6f3ee]/90 backdrop-blur-[2px]">
@@ -343,44 +284,50 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
               </div>
             ) : null}
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-[var(--black)]">Workspace</p>
-                <p className="mt-1 text-xs text-[var(--darkgray)]">
-                  On desktop, drag images into category boxes. On mobile, you can still review and move images comfortably.
-                </p>
-              </div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-xs font-medium text-[var(--black)] shadow-sm">
-                <MousePointerClick size={14} className="text-[var(--primary)]" />
-                Drag and drop is enabled
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(300px,0.9fr)_minmax(0,1.1fr)]">
+            <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.9fr)_minmax(0,1.1fr)]">
               <div
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={(event) => handleDropToCategory(event, null)}
-                className="rounded-[24px] border border-[#e6ddd2] bg-white p-4 xl:flex xl:flex-col"
+                className="rounded-[20px] border border-[#e6ddd2] bg-white p-4 xl:flex xl:flex-col"
               >
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-[var(--black)]">Selected Images</h3>
-                    <p className="mt-1 text-xs text-[var(--darkgray)]">Unassigned images stay here until dropped into a category box.</p>
+                    <p className="mt-1 text-xs text-[var(--darkgray)]">Unassigned images stay here.</p>
                   </div>
-                  <span className="rounded-full bg-[var(--secondary)] px-3 py-1 text-xs font-semibold text-[var(--black)]">
-                    {unassignedCount}
-                  </span>
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border border-[#eadfd2] bg-white px-2.5 py-1 text-[10px] font-semibold text-[var(--black)]">
+                        Selected {pendingImages.length}
+                      </span>
+                      <span className="hidden rounded-full border border-[#eadfd2] bg-white px-2.5 py-1 text-[10px] font-semibold text-[var(--black)] sm:inline-flex">
+                        Assigned {assignedCount}
+                      </span>
+                      <span className="hidden rounded-full border border-[#eadfd2] bg-white px-2.5 py-1 text-[10px] font-semibold text-[var(--black)] sm:inline-flex">
+                        Unassigned {unassignedCount}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => inputRef.current?.click()}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[var(--primary)] px-3 py-2 text-xs font-semibold text-white shadow-md transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    >
+                      {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
+                      {isSubmitting ? "Uploading..." : "Choose Images"}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="scrollbar-hidden mt-4 min-h-[320px] rounded-[20px] border border-[#eee3d7] bg-[#fcfaf7] p-3 xl:flex-1 xl:overflow-y-auto">
+                <div className="scrollbar-hidden mt-3 min-h-[260px] rounded-[16px] bg-[#f9f5ef] p-3 xl:flex-1 xl:overflow-y-auto">
                   {pendingImages.length === 0 ? (
-                    <div className="flex min-h-[284px] flex-col items-center justify-center gap-2 text-center text-[var(--darkgray)]">
+                    <div className="flex min-h-[224px] flex-col items-center justify-center gap-2 text-center text-[var(--darkgray)]">
                       <UploadCloud size={28} />
-                      <p className="text-sm font-medium">No images selected yet</p>
-                      <p className="text-xs">Choose multiple files and they will appear here instantly.</p>
+                      <p className="text-sm font-medium">No images selected</p>
+                      <p className="text-xs">Choose multiple files to start.</p>
                     </div>
                   ) : pendingImages.filter((image) => image.categoryKey === null).length === 0 ? (
-                    <div className="flex min-h-[284px] items-center justify-center rounded-2xl border border-dashed border-[#d9d0c4] text-center text-sm text-[var(--darkgray)]">
+                    <div className="flex min-h-[224px] items-center justify-center rounded-2xl border border-dashed border-[#d9d0c4] text-center text-sm text-[var(--darkgray)]">
                       All selected images are assigned. Drop any image here to unassign it.
                     </div>
                   ) : (
@@ -390,7 +337,42 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                         .map((image) => (
                           <div
                             key={image.key}
-                            draggable={!isSubmitting}
+                            draggable={!isSubmitting && !isTouch}
+                            onPointerDown={(event) => {
+                              if (!isTouch || isSubmitting) {
+                                return;
+                              }
+                              if (longPressTimerRef.current) {
+                                window.clearTimeout(longPressTimerRef.current);
+                              }
+                              longPressTimerRef.current = window.setTimeout(() => {
+                                setIsMultiSelect(true);
+                                toggleSelectedKey(image.key);
+                              }, 450);
+                            }}
+                            onPointerUp={() => {
+                              if (!isTouch) {
+                                return;
+                              }
+                              if (longPressTimerRef.current) {
+                                window.clearTimeout(longPressTimerRef.current);
+                                longPressTimerRef.current = null;
+                              }
+                            }}
+                            onPointerLeave={() => {
+                              if (!isTouch) {
+                                return;
+                              }
+                              if (longPressTimerRef.current) {
+                                window.clearTimeout(longPressTimerRef.current);
+                                longPressTimerRef.current = null;
+                              }
+                            }}
+                            onClick={() => {
+                              if (isTouch && isMultiSelect) {
+                                toggleSelectedKey(image.key);
+                              }
+                            }}
                             onDragStart={(event) => {
                               setDraggedKey(image.key);
                               event.dataTransfer.setData(INTERNAL_DRAG_KEY, image.key);
@@ -412,6 +394,11 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                                 className="h-24 w-full rounded-xl object-cover"
                                 unoptimized
                               />
+                              {isTouch && isMultiSelect ? (
+                                <span className={`absolute left-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${selectedKeys.has(image.key) ? "bg-[var(--primary)] text-white" : "bg-white/90 text-[var(--black)]"}`}>
+                                  {selectedKeys.has(image.key) ? "x" : ""}
+                                </span>
+                              ) : null}
                               <button
                                 type="button"
                                 disabled={isSubmitting}
@@ -423,7 +410,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                             </div>
                             <div className="mt-2 flex items-center justify-between gap-2">
                               <p className="truncate text-xs font-medium text-[var(--black)]">{image.file.name}</p>
-                              <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-[var(--primary)]">
+                              <span className="hidden items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-[var(--primary)] sm:inline-flex">
                                 <Grip size={10} />
                                 Drag
                               </span>
@@ -439,14 +426,11 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-[var(--black)]">Category Boxes</h3>
-                    <p className="mt-1 text-xs text-[var(--darkgray)]">Drop each image into exactly one category. Empty categories stay clearly visible.</p>
+                    <p className="mt-1 text-xs text-[var(--darkgray)]">Drop each image into one category.</p>
                   </div>
-                  <span className="rounded-full bg-[var(--secondary)] px-3 py-1 text-xs font-semibold text-[var(--black)]">
-                    {assignedCount} assigned
-                  </span>
                 </div>
 
-                <div className="scrollbar-hidden mt-4 grid gap-3 xl:flex-1 xl:grid-cols-1 xl:overflow-y-auto xl:pr-1">
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
                   {VENDOR_PRODUCT_CATEGORIES.map((category) => {
                     const categoryImages = pendingImages.filter((image) => image.categoryKey === category.key);
                     return (
@@ -454,7 +438,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                         key={category.key}
                         onDragOver={(event) => event.preventDefault()}
                         onDrop={(event) => handleDropToCategory(event, category.key)}
-                        className={`rounded-[20px] border p-3 shadow-sm transition ${
+                        className={`rounded-[18px] border p-3 transition ${
                           categoryImages.length > 0
                             ? "border-[#d8ccb9] bg-[#f7f1e8]"
                             : "border-[#ece3d8] bg-[#fcfaf7]"
@@ -463,72 +447,108 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <h4 className="text-sm font-semibold text-[var(--black)]">{category.label}</h4>
-                            <p className="mt-0.5 text-[10px] text-[var(--darkgray)]">
-                              {categoryImages.length > 0 ? "Assigned images" : "Drop images here"}
-                            </p>
+                            {categoryImages.length > 0 ? (
+                              <p className="mt-0.5 text-[10px] text-[var(--darkgray)]">Assigned images</p>
+                            ) : null}
                           </div>
                           <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[var(--black)] shadow-sm">
                             {categoryImages.length}
                           </span>
                         </div>
 
-                        <div className="mt-3 min-h-[90px] rounded-[16px] border border-[#ece3d8] bg-white p-2.5">
-                          {categoryImages.length === 0 ? (
-                            <div className="flex min-h-[74px] items-center justify-center rounded-2xl border border-dashed border-[#ddd4c9] px-2 text-center text-[10px] text-[var(--darkgray)]">
-                              {category.label}
-                            </div>
-                          ) : (
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              {categoryImages.map((image) => (
-                                <div
-                                key={image.key}
-                                  draggable={!isSubmitting}
-                                  onDragStart={(event) => {
-                                    setDraggedKey(image.key);
-                                    event.dataTransfer.setData(INTERNAL_DRAG_KEY, image.key);
-                                    event.dataTransfer.effectAllowed = "move";
-                                  }}
-                                  onDragEnd={() => setDraggedKey(null)}
-                                  className={`rounded-2xl border p-2 shadow-sm transition ${
-                                    draggedKey === image.key
-                                      ? "border-[var(--primary)] bg-[#f7efe6]"
-                                      : "border-[#e6ddd2] bg-[#faf8f4]"
-                                  }`}
-                                >
-                                  <div className="relative overflow-hidden rounded-xl">
-                                    <Image
-                                      src={image.previewUrl}
-                                      alt={image.file.name}
-                                      width={320}
-                                      height={220}
-                                      className="h-16 w-full rounded-xl object-cover"
-                                      unoptimized
-                                    />
-                                    <button
-                                      type="button"
-                                      disabled={isSubmitting}
-                                      onClick={() => removePendingImage(image.key)}
-                                      className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  </div>
-                                  <div className="mt-1.5 flex items-center justify-between gap-2">
-                                    <p className="truncate text-[11px] font-medium text-[var(--black)]">{image.file.name}</p>
-                                    <button
-                                      type="button"
-                                      disabled={isSubmitting}
-                                      onClick={() => assignCategory(image.key, null)}
-                                      className="text-[10px] font-medium text-[var(--primary)] transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                      Move back
-                                    </button>
-                                  </div>
+                        {categoryImages.length === 0 ? (
+                          <p className="mt-2 text-[10px] text-[var(--darkgray)]">Drop images here</p>
+                        ) : (
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            {categoryImages.map((image) => (
+                              <div
+                              key={image.key}
+                                draggable={!isSubmitting && !isTouch}
+                                onPointerDown={() => {
+                                  if (!isTouch || isSubmitting) {
+                                    return;
+                                  }
+                                  if (longPressTimerRef.current) {
+                                    window.clearTimeout(longPressTimerRef.current);
+                                  }
+                                  longPressTimerRef.current = window.setTimeout(() => {
+                                    setIsMultiSelect(true);
+                                    toggleSelectedKey(image.key);
+                                  }, 450);
+                                }}
+                                onPointerUp={() => {
+                                  if (!isTouch) {
+                                    return;
+                                  }
+                                  if (longPressTimerRef.current) {
+                                    window.clearTimeout(longPressTimerRef.current);
+                                    longPressTimerRef.current = null;
+                                  }
+                                }}
+                                onPointerLeave={() => {
+                                  if (!isTouch) {
+                                    return;
+                                  }
+                                  if (longPressTimerRef.current) {
+                                    window.clearTimeout(longPressTimerRef.current);
+                                    longPressTimerRef.current = null;
+                                  }
+                                }}
+                                onClick={() => {
+                                  if (isTouch && isMultiSelect) {
+                                    toggleSelectedKey(image.key);
+                                  }
+                                }}
+                                onDragStart={(event) => {
+                                  setDraggedKey(image.key);
+                                  event.dataTransfer.setData(INTERNAL_DRAG_KEY, image.key);
+                                  event.dataTransfer.effectAllowed = "move";
+                                }}
+                                onDragEnd={() => setDraggedKey(null)}
+                                className={`rounded-2xl border p-2 shadow-sm transition ${
+                                  draggedKey === image.key
+                                    ? "border-[var(--primary)] bg-[#f7efe6]"
+                                    : "border-[#e6ddd2] bg-[#faf8f4]"
+                                }`}
+                              >
+                                <div className="relative overflow-hidden rounded-xl">
+                                  <Image
+                                    src={image.previewUrl}
+                                    alt={image.file.name}
+                                    width={320}
+                                    height={220}
+                                    className="h-16 w-full rounded-xl object-cover"
+                                    unoptimized
+                                  />
+                                  {isTouch && isMultiSelect ? (
+                                    <span className={`absolute left-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${selectedKeys.has(image.key) ? "bg-[var(--primary)] text-white" : "bg-white/90 text-[var(--black)]"}`}>
+                                      {selectedKeys.has(image.key) ? "x" : ""}
+                                    </span>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    disabled={isSubmitting}
+                                    onClick={() => removePendingImage(image.key)}
+                                    className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
                                 </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                                <div className="mt-1.5 flex items-center justify-between gap-2">
+                                  <p className="truncate text-[11px] font-medium text-[var(--black)]">{image.file.name}</p>
+                                  <button
+                                    type="button"
+                                    disabled={isSubmitting}
+                                    onClick={() => assignCategory(image.key, null)}
+                                    className="text-[10px] font-medium text-[var(--primary)] transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    Move back
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -537,15 +557,13 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-[#eadfd2] bg-[linear-gradient(135deg,#f8f3ec_0%,#f1e7da_100%)] px-4 py-4 shadow-sm">
+          <div className="rounded-[20px] border border-[#eadfd2] bg-white px-4 py-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-[var(--black)]">Ready to save</p>
-                <p className="mt-1 text-xs text-[var(--darkgray)]">
-                  Once saved, your categorized images will appear on the public vendor page.
-                </p>
+                <p className="mt-1 text-xs text-[var(--darkgray)]">Save when everything is assigned.</p>
               </div>
-              <div className="flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[var(--black)] shadow-sm">
+              <div className="flex items-center gap-2 rounded-full bg-[#f7f1e8] px-3 py-1.5 text-xs font-semibold text-[var(--black)]">
                 <CheckCircle2 size={14} className={unassignedCount === 0 && pendingImages.length > 0 ? "text-emerald-600" : "text-[var(--darkgray)]"} />
                 {unassignedCount === 0 && pendingImages.length > 0 ? "All images assigned" : `${unassignedCount} image${unassignedCount === 1 ? "" : "s"} left`}
               </div>
@@ -561,8 +579,73 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
               </button>
             </div>
           </div>
+
+          {isTouch && isMultiSelect ? (
+            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#eadfd2] bg-white/95 px-4 py-3 shadow-[0_-12px_30px_-20px_rgba(0,0,0,0.4)] backdrop-blur">
+              <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-[var(--black)]">
+                  <span className="rounded-full border border-[#eadfd2] bg-white px-3 py-1">Selected {selectedCount}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearSelection();
+                      setIsMultiSelect(false);
+                    }}
+                    className="rounded-full border border-[#eadfd2] bg-white px-3 py-1 text-[11px] font-semibold text-[var(--darkgray)]"
+                  >
+                    Done
+                  </button>
+                </div>
+
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                  <select
+                    value={selectedCategory}
+                    onChange={(event) => setSelectedCategory(event.target.value as VendorProductCategoryKey)}
+                    className="w-full rounded-full border border-[#eadfd2] bg-white px-3 py-2 text-xs font-semibold text-[var(--black)] sm:min-w-[180px] sm:w-auto"
+                  >
+                    <option value="">Move to category</option>
+                    {VENDOR_PRODUCT_CATEGORIES.map((category) => (
+                      <option key={category.key} value={category.key}>
+                        {category.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!canAssignSelected}
+                    onClick={() => {
+                      if (!canAssignSelected) return;
+                      assignCategoryBulk(Array.from(selectedKeys), selectedCategory);
+                      toast.success(`Assigned to ${VENDOR_PRODUCT_CATEGORIES.find((c) => c.key === selectedCategory)?.label ?? "category"}.`);
+                      setSelectedCategory("");
+                      clearSelection();
+                      setIsMultiSelect(false);
+                    }}
+                    className="w-full rounded-full bg-[var(--primary)] px-4 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                  >
+                    Assign
+                  </button>
+                  <button
+                    type="button"
+                    disabled={selectedCount === 0}
+                    onClick={() => {
+                      if (selectedCount === 0) return;
+                      assignCategoryBulk(Array.from(selectedKeys), null);
+                      toast.success("Moved back to unassigned.");
+                      clearSelection();
+                      setIsMultiSelect(false);
+                    }}
+                    className="w-full rounded-full border border-[#eadfd2] bg-white px-4 py-2 text-xs font-semibold text-[var(--black)] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                  >
+                    Move back
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </form>
       </div>
     </div>
   );
 }
+

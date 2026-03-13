@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Images, LayoutDashboard, LogOut, Menu, UploadCloud, User, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Images, LayoutDashboard, LogOut, Menu, MousePointerClick, UploadCloud, User, X } from "lucide-react";
 
 type VendorDashboardTab = "analytics" | "profile" | "add-products" | "manage-products";
 
@@ -161,9 +161,17 @@ export default function VendorDashboardShell({
                 <h1 className="mt-1 text-lg font-semibold text-[var(--black)] md:text-2xl">{activeItem.shortLabel}</h1>
               </div>
             </div>
-            <span className="hidden rounded-full bg-[#f3ece3] px-3 py-1 text-xs font-semibold capitalize text-[#8a5b31] md:inline-flex">
-              {status}
-            </span>
+            <div className="hidden items-center gap-2 md:flex">
+              {activeTab === "add-products" ? (
+                <span className="inline-flex items-center gap-2 rounded-full border border-[#eadfd2] bg-white px-3 py-1 text-xs font-semibold text-[var(--black)] shadow-sm">
+                  <MousePointerClick size={13} className="text-[var(--primary)]" />
+                  Drag and drop
+                </span>
+              ) : null}
+              <span className="rounded-full bg-[#f3ece3] px-3 py-1 text-xs font-semibold capitalize text-[#8a5b31]">
+                {status}
+              </span>
+            </div>
           </div>
 
           <div className="space-y-5">{children}</div>
