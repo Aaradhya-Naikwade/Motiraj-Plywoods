@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Grip, ImagePlus, Loader2, MousePointerClick, Trash2, UploadCloud } from "lucide-react";
+import { CheckCircle2, ChevronDown, Grip, ImagePlus, Loader2, MousePointerClick, Trash2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import {
   VENDOR_PRODUCT_ALLOWED_MIME_TYPES,
@@ -319,7 +319,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                   </div>
                 </div>
 
-                <div className="scrollbar-hidden mt-3 min-h-[260px] rounded-[16px] bg-[#f9f5ef] p-3 xl:flex-1 xl:overflow-y-auto">
+                <div className="scrollbar-hidden mt-3 min-h-[260px] rounded-[16px] bg-transparent p-0 sm:bg-[#f9f5ef] sm:p-3 xl:flex-1 xl:overflow-y-auto">
                   {pendingImages.length === 0 ? (
                     <div className="flex min-h-[224px] flex-col items-center justify-center gap-2 text-center text-[var(--darkgray)]">
                       <UploadCloud size={28} />
@@ -331,7 +331,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                       All selected images are assigned. Drop any image here to unassign it.
                     </div>
                   ) : (
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-2 grid-cols-2 sm:grid-cols-2">
                       {pendingImages
                         .filter((image) => image.categoryKey === null)
                         .map((image) => (
@@ -408,7 +408,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                                 <Trash2 size={15} />
                               </button>
                             </div>
-                            <div className="mt-2 flex items-center justify-between gap-2">
+                            <div className="mt-2 hidden items-center justify-between gap-2 sm:flex">
                               <p className="truncate text-xs font-medium text-[var(--black)]">{image.file.name}</p>
                               <span className="hidden items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-[var(--primary)] sm:inline-flex">
                                 <Grip size={10} />
@@ -459,7 +459,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                         {categoryImages.length === 0 ? (
                           <p className="mt-2 text-[10px] text-[var(--darkgray)]">Drop images here</p>
                         ) : (
-                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          <div className="mt-3 grid gap-2 grid-cols-2 sm:grid-cols-2">
                             {categoryImages.map((image) => (
                               <div
                               key={image.key}
@@ -534,7 +534,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                                     <Trash2 size={13} />
                                   </button>
                                 </div>
-                                <div className="mt-1.5 flex items-center justify-between gap-2">
+                                <div className="mt-1.5 hidden items-center justify-between gap-2 sm:flex">
                                   <p className="truncate text-[11px] font-medium text-[var(--black)]">{image.file.name}</p>
                                   <button
                                     type="button"
@@ -598,18 +598,21 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                 </div>
 
                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-                  <select
-                    value={selectedCategory}
-                    onChange={(event) => setSelectedCategory(event.target.value as VendorProductCategoryKey)}
-                    className="w-full appearance-none rounded-full border border-[#e6ddd2] bg-white px-4 py-2 text-xs font-semibold text-[var(--black)] shadow-sm focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 sm:min-w-[180px] sm:w-auto"
-                  >
-                    <option value="">Move to category</option>
-                    {VENDOR_PRODUCT_CATEGORIES.map((category) => (
-                      <option key={category.key} value={category.key}>
-                        {category.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative w-full sm:min-w-[180px] sm:w-auto">
+                    <select
+                      value={selectedCategory}
+                      onChange={(event) => setSelectedCategory(event.target.value as VendorProductCategoryKey)}
+                      className="w-full appearance-none rounded-full border border-[#e6ddd2] bg-white px-4 py-2 pr-9 text-xs font-semibold text-[var(--black)] shadow-sm focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
+                    >
+                      <option value="">Move to category</option>
+                      {VENDOR_PRODUCT_CATEGORIES.map((category) => (
+                        <option key={category.key} value={category.key}>
+                          {category.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--darkgray)]" />
+                  </div>
                   <button
                     type="button"
                     disabled={!canAssignSelected}
