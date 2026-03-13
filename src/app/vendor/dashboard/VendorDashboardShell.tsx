@@ -3,7 +3,7 @@
 import { ReactNode, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Images, LayoutDashboard, LogOut, Menu, UploadCloud, User, X } from "lucide-react";
 
-type VendorDashboardTab = "analytics" | "profile" | "products" | "add-products" | "manage-products";
+type VendorDashboardTab = "analytics" | "profile" | "add-products" | "manage-products";
 
 type VendorDashboardShellProps = {
   activeTab: VendorDashboardTab;
@@ -33,13 +33,6 @@ const navItems: Array<{
       shortLabel: "Profile",
       href: "/vendor/dashboard?tab=profile",
       icon: User,
-    },
-    {
-      key: "products",
-      label: "Products",
-      shortLabel: "Products",
-      href: "/vendor/dashboard?tab=products",
-      icon: Images,
     },
     {
       key: "add-products",
