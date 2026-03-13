@@ -28,7 +28,7 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
   if (shouldHideHeader) {
     return null;
   }
-
+    
   const navItem =
     "px-4 py-1.5 rounded-full transition-all duration-200 text-amber-800";
 
@@ -38,11 +38,29 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
   return (
     <header className="w-full font-sans relative z-50">
       {/* Top Banner */}
-      <div className="bg-[var(--primary)] text-white text-xs py-1.5 text-center px-4">
-        36% OFF all custom storage | Free delivery on everything |
-        <span className="font-bold underline italic text-red-100 ml-1">
-          Ends 17.02.00
-        </span>
+      <div className="overflow-hidden bg-[var(--primary)] py-1.5 text-white">
+        <div className="flex w-max whitespace-nowrap text-xs md:text-sm">
+          <div className="header-marquee-track flex">
+            <span className="px-6">
+              36% OFF all custom storage | Free delivery on everything |
+              <span className="ml-1 font-bold underline italic text-red-100">
+                Ends 17.02.00
+              </span>
+            </span>
+            <span className="px-6">
+              36% OFF all custom storage | Free delivery on everything |
+              <span className="ml-1 font-bold underline italic text-red-100">
+                Ends 17.02.00
+              </span>
+            </span>
+            <span className="px-6">
+              36% OFF all custom storage | Free delivery on everything |
+              <span className="ml-1 font-bold underline italic text-red-100">
+                Ends 17.02.00
+              </span>
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Main Navbar */}

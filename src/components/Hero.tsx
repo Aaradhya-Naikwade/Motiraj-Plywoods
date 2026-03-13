@@ -115,7 +115,7 @@ const Hero = () => {
             >
               {item}
             </button>
-
+                           
             <div
               className={`
               absolute left-0 top-full w-full z-40
@@ -135,7 +135,7 @@ const Hero = () => {
                   <li
                     key={subItem}
                     onClick={() => handleRedirect(subItem)}
-                    className="px-5 md:px-6 py-2 text-sm md:text-base text-black
+                    className="px-5 md:px-6 py-2 text-sm md:text-base text-white
                     hover:bg-white/10 cursor-pointer transition"
                   >
                     {subItem}

@@ -328,7 +328,7 @@ export async function vendorRegisterAction(formData: FormData) {
 export async function vendorLogoutAction() {
   const cookieStore = await cookies();
   cookieStore.delete(VENDOR_AUTH_COOKIE);
-  redirect("/vendor/auth");
+  redirect("/");
 }
 
 export async function vendorUpdateProfileAction(formData: FormData) {
@@ -343,15 +343,15 @@ export async function vendorUpdateProfileAction(formData: FormData) {
   const whatsappNumber = whatsappRaw ? normalizeMobile(whatsappRaw) : "";
 
   if (!name || !companyName || !dob) {
-    redirect("/vendor/dashboard?error=missing_fields");
+    redirect("/vendor/dashboard?tab=profile&mode=edit&error=missing_fields");
   }
 
   if (!isAtLeast18YearsOld(dob)) {
-    redirect("/vendor/dashboard?error=underage");
+    redirect("/vendor/dashboard?tab=profile&mode=edit&error=underage");
   }
 
   if (whatsappNumber && !isValidMobile(whatsappNumber)) {
-    redirect("/vendor/dashboard?error=invalid_whatsapp");
+    redirect("/vendor/dashboard?tab=profile&mode=edit&error=invalid_whatsapp");
   }
 
   await updateVendorProfile(vendor._id.toString(), {
@@ -363,7 +363,7 @@ export async function vendorUpdateProfileAction(formData: FormData) {
     dob,
   });
 
-  redirect("/vendor/dashboard?status=profile_updated");
+  redirect("/vendor/dashboard?tab=profile&status=profile_updated");
 }
 
 export async function vendorCreateCategorizedProductsAction(formData: FormData) {
@@ -376,7 +376,7 @@ export async function vendorCreateCategorizedProductsAction(formData: FormData) 
   if (imageFiles.length === 0) {
     redirect("/vendor/dashboard?tab=products&error=images_required");
   }
-
+ 
   if (imageFiles.length > VENDOR_PRODUCT_BATCH_MAX_FILES) {
     redirect("/vendor/dashboard?tab=products&error=too_many_images");
   }
