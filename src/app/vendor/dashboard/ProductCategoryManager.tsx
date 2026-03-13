@@ -41,10 +41,9 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
   const [draggedKey, setDraggedKey] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isTouch, setIsTouch] = useState(false);
-  const [isMultiSelect, setIsMultiSelect] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [selectedCategory, setSelectedCategory] = useState<VendorProductCategoryKey | "">("");
-  const longPressTimerRef = useRef<number | null>(null);
+  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
 
   const syncInputFiles = (files: File[]) => {
     if (!inputRef.current) {
@@ -195,10 +194,10 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
   }, [pendingImages]);
 
   useEffect(() => {
-    setIsTouch(
+    const isTouchDevice =
       typeof window !== "undefined" &&
-        ("ontouchstart" in window || window.matchMedia?.("(pointer: coarse)").matches)
-    );
+      ("ontouchstart" in window || window.matchMedia?.("(pointer: coarse)")?.matches);
+    setIsTouch(Boolean(isTouchDevice));
     return () => {
       pendingImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
     };
@@ -221,7 +220,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
   const canAssignSelected = selectedCount > 0 && selectedCategory !== "";
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${isTouch ? "pb-36" : ""}`}>
       <div className="rounded-[32px] border border-white/80 bg-white/95 p-4 shadow-[0_24px_70px_-40px_rgba(73,36,10,0.42)] md:p-6">
         <form
           action={saveAction}
@@ -338,38 +337,8 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                           <div
                             key={image.key}
                             draggable={!isSubmitting && !isTouch}
-                            onPointerDown={(event) => {
-                              if (!isTouch || isSubmitting) {
-                                return;
-                              }
-                              if (longPressTimerRef.current) {
-                                window.clearTimeout(longPressTimerRef.current);
-                              }
-                              longPressTimerRef.current = window.setTimeout(() => {
-                                setIsMultiSelect(true);
-                                toggleSelectedKey(image.key);
-                              }, 450);
-                            }}
-                            onPointerUp={() => {
-                              if (!isTouch) {
-                                return;
-                              }
-                              if (longPressTimerRef.current) {
-                                window.clearTimeout(longPressTimerRef.current);
-                                longPressTimerRef.current = null;
-                              }
-                            }}
-                            onPointerLeave={() => {
-                              if (!isTouch) {
-                                return;
-                              }
-                              if (longPressTimerRef.current) {
-                                window.clearTimeout(longPressTimerRef.current);
-                                longPressTimerRef.current = null;
-                              }
-                            }}
                             onClick={() => {
-                              if (isTouch && isMultiSelect) {
+                              if (isTouch) {
                                 toggleSelectedKey(image.key);
                               }
                             }}
@@ -394,9 +363,9 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                                 className="h-24 w-full rounded-xl object-cover"
                                 unoptimized
                               />
-                              {isTouch && isMultiSelect ? (
+                              {isTouch && selectedKeys.has(image.key) ? (
                                 <span className={`absolute left-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${selectedKeys.has(image.key) ? "bg-[var(--primary)] text-white" : "bg-white/90 text-[var(--black)]"}`}>
-                                  {selectedKeys.has(image.key) ? "x" : ""}
+                                  x
                                 </span>
                               ) : null}
                               <button
@@ -464,38 +433,8 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                               <div
                               key={image.key}
                                 draggable={!isSubmitting && !isTouch}
-                                onPointerDown={() => {
-                                  if (!isTouch || isSubmitting) {
-                                    return;
-                                  }
-                                  if (longPressTimerRef.current) {
-                                    window.clearTimeout(longPressTimerRef.current);
-                                  }
-                                  longPressTimerRef.current = window.setTimeout(() => {
-                                    setIsMultiSelect(true);
-                                    toggleSelectedKey(image.key);
-                                  }, 450);
-                                }}
-                                onPointerUp={() => {
-                                  if (!isTouch) {
-                                    return;
-                                  }
-                                  if (longPressTimerRef.current) {
-                                    window.clearTimeout(longPressTimerRef.current);
-                                    longPressTimerRef.current = null;
-                                  }
-                                }}
-                                onPointerLeave={() => {
-                                  if (!isTouch) {
-                                    return;
-                                  }
-                                  if (longPressTimerRef.current) {
-                                    window.clearTimeout(longPressTimerRef.current);
-                                    longPressTimerRef.current = null;
-                                  }
-                                }}
                                 onClick={() => {
-                                  if (isTouch && isMultiSelect) {
+                                  if (isTouch) {
                                     toggleSelectedKey(image.key);
                                   }
                                 }}
@@ -520,9 +459,9 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                                     className="h-16 w-full rounded-xl object-cover"
                                     unoptimized
                                   />
-                                  {isTouch && isMultiSelect ? (
+                                  {isTouch && selectedKeys.has(image.key) ? (
                                     <span className={`absolute left-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${selectedKeys.has(image.key) ? "bg-[var(--primary)] text-white" : "bg-white/90 text-[var(--black)]"}`}>
-                                      {selectedKeys.has(image.key) ? "x" : ""}
+                                      x
                                     </span>
                                   ) : null}
                                   <button
@@ -572,7 +511,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
               <button
                 type="submit"
                 disabled={isSubmitting || pendingImages.length === 0 || unassignedCount > 0}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-md transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                className="mt-4 hidden w-full items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-md transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:inline-flex sm:w-auto"
               >
                 {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : null}
                 {isSubmitting ? "Uploading Images..." : "Save Categorized Images"}
@@ -580,39 +519,63 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
             </div>
           </div>
 
-          {isTouch && isMultiSelect ? (
-            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#eadfd2] bg-white/95 px-4 py-3 shadow-[0_-12px_30px_-20px_rgba(0,0,0,0.4)] backdrop-blur">
-              <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-[var(--black)]">
-                  <span className="rounded-full border border-[#eadfd2] bg-white px-3 py-1">Selected {selectedCount}</span>
+          {isTouch ? (
+            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#eadfd2] bg-white/95 px-3 py-2 shadow-[0_-10px_24px_-18px_rgba(0,0,0,0.35)] backdrop-blur">
+              <div className="mx-auto flex max-w-5xl flex-col gap-2">
+                <div className="flex items-center justify-between text-[10px] font-semibold text-[var(--black)]">
+                  <span className="rounded-full border border-[#eadfd2] bg-white px-2 py-0.5">Selected {selectedCount}</span>
                   <button
-                    type="button"
-                    onClick={() => {
-                      clearSelection();
-                      setIsMultiSelect(false);
-                    }}
-                    className="rounded-full border border-[#eadfd2] bg-white px-3 py-1 text-[11px] font-semibold text-[var(--darkgray)]"
+                    type="submit"
+                    disabled={isSubmitting || pendingImages.length === 0 || unassignedCount > 0}
+                    className="rounded-full bg-[var(--primary)] px-3 py-1 text-[10px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Done
+                    {isSubmitting ? "Uploading..." : "Save"}
                   </button>
                 </div>
 
-                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-                  <div className="relative w-full sm:min-w-[180px] sm:w-auto">
-                    <select
-                      value={selectedCategory}
-                      onChange={(event) => setSelectedCategory(event.target.value as VendorProductCategoryKey)}
-                      className="w-full appearance-none rounded-full border border-[#e6ddd2] bg-white px-4 py-2 pr-9 text-xs font-semibold text-[var(--black)] shadow-sm focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
+                <div className="flex w-full items-center gap-2">
+                  <div className="relative flex-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryMenuOpen((current) => !current)}
+                      className="flex w-full items-center justify-between rounded-full border border-[#e6ddd2] bg-white px-3 py-2 text-[11px] font-semibold text-[var(--black)] shadow-sm"
                     >
-                      <option value="">Move to category</option>
-                      {VENDOR_PRODUCT_CATEGORIES.map((category) => (
-                        <option key={category.key} value={category.key}>
-                          {category.label}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--darkgray)]" />
+                      <span className="truncate">
+                        {selectedCategory
+                          ? VENDOR_PRODUCT_CATEGORIES.find((category) => category.key === selectedCategory)?.label ?? "Move to category"
+                          : "Move to category"}
+                      </span>
+                      <ChevronDown size={14} className="text-[var(--darkgray)]" />
+                    </button>
+                    {isCategoryMenuOpen ? (
+                      <div className="absolute left-0 right-0 bottom-full z-10 mb-2 max-h-56 overflow-auto rounded-2xl border border-[#e6ddd2] bg-white p-2 shadow-lg">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCategory("");
+                            setIsCategoryMenuOpen(false);
+                          }}
+                          className="w-full rounded-xl px-3 py-2 text-left text-xs font-semibold text-[var(--darkgray)] hover:bg-[#f7f1e8]"
+                        >
+                          Move to category
+                        </button>
+                        {VENDOR_PRODUCT_CATEGORIES.map((category) => (
+                          <button
+                            key={category.key}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCategory(category.key);
+                              setIsCategoryMenuOpen(false);
+                            }}
+                            className="w-full rounded-xl px-3 py-2 text-left text-xs font-semibold text-[var(--black)] hover:bg-[#f7f1e8]"
+                          >
+                            {category.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
+
                   <button
                     type="button"
                     disabled={!canAssignSelected}
@@ -622,27 +585,26 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                       toast.success(`Assigned to ${VENDOR_PRODUCT_CATEGORIES.find((c) => c.key === selectedCategory)?.label ?? "category"}.`);
                       setSelectedCategory("");
                       clearSelection();
-                      setIsMultiSelect(false);
                     }}
-                    className="w-full rounded-full bg-[var(--primary)] px-4 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    className="rounded-full bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Assign
                   </button>
-                  <button
-                    type="button"
-                    disabled={selectedCount === 0}
-                    onClick={() => {
-                      if (selectedCount === 0) return;
-                      assignCategoryBulk(Array.from(selectedKeys), null);
-                      toast.success("Moved back to unassigned.");
-                      clearSelection();
-                      setIsMultiSelect(false);
-                    }}
-                    className="w-full rounded-full border border-[#eadfd2] bg-white px-4 py-2 text-xs font-semibold text-[var(--black)] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-                  >
-                    Move back
-                  </button>
                 </div>
+
+                <button
+                  type="button"
+                  disabled={selectedCount === 0}
+                  onClick={() => {
+                    if (selectedCount === 0) return;
+                    assignCategoryBulk(Array.from(selectedKeys), null);
+                    toast.success("Moved back to unassigned.");
+                    clearSelection();
+                  }}
+                  className="w-full rounded-full border border-[#eadfd2] bg-white px-3 py-2 text-[11px] font-semibold text-[var(--black)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Move back
+                </button>
               </div>
             </div>
           ) : null}
