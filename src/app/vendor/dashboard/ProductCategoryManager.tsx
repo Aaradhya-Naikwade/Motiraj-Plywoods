@@ -601,7 +601,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                   <select
                     value={selectedCategory}
                     onChange={(event) => setSelectedCategory(event.target.value as VendorProductCategoryKey)}
-                    className="w-full rounded-full border border-[#eadfd2] bg-white px-3 py-2 text-xs font-semibold text-[var(--black)] sm:min-w-[180px] sm:w-auto"
+                    className="w-full appearance-none rounded-full border border-[#e6ddd2] bg-white px-4 py-2 text-xs font-semibold text-[var(--black)] shadow-sm focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 sm:min-w-[180px] sm:w-auto"
                   >
                     <option value="">Move to category</option>
                     {VENDOR_PRODUCT_CATEGORIES.map((category) => (
