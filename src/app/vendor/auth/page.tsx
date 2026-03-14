@@ -31,8 +31,6 @@ function getVendorErrorMessage(error?: string): string | null {
       return "You have completed one year with us. To renew your ID, please contact us.";
     case "missing_fields":
       return "Please fill in all required fields and confirm the renewal checkbox.";
-    case "invalid_email":
-      return "Please enter a valid email address.";
     case "weak_password":
       return "Password must be at least 8 characters long.";
     case "password_mismatch":
@@ -41,8 +39,6 @@ function getVendorErrorMessage(error?: string): string | null {
       return "Vendor age must be 18 years or older.";
     case "mobile_exists":
       return "Mobile number is already registered. Please login.";
-    case "email_exists":
-      return "Email address is already registered. Please login.";
     default:
       return null;
   }

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Crown,
   Eye,
   Heart,
@@ -17,9 +18,11 @@ import {
   Search,
   SquarePen,
   Store,
+  Tag,
   Trash2,
   X,
 } from "lucide-react";
+import { VENDOR_PRODUCT_CATEGORIES, type VendorProductCategoryKey } from "@/lib/vendor-product-categories";
 
 type TabId = "overview" | "vendors" | "products" | "catalogues" | "likes" | "leads" | "leaders";
 
@@ -47,6 +50,7 @@ export type VendorRow = {
 
 export type ProductRow = {
   id: string;
+  categoryKey: VendorProductCategoryKey;
   category: string;
   imageName: string;
   vendor: string;
@@ -98,6 +102,10 @@ type AdminDashboardClientProps = {
   onToggleProductVisibilityAction: (input: {
     productId: string;
     hidden: boolean;
+  }) => Promise<{ ok: boolean; error?: string }>;
+  onUpdateProductCategoryAction: (input: {
+    productId: string;
+    categoryKey: VendorProductCategoryKey;
   }) => Promise<{ ok: boolean; error?: string }>;
   onDeleteProductAction: (productId: string) => Promise<{ ok: boolean; error?: string }>;
   onUpdateLeadAction: (input: {
@@ -184,6 +192,7 @@ export default function AdminDashboardClient({
   onUpdateVendorAction,
   onDeleteVendorAction,
   onToggleProductVisibilityAction,
+  onUpdateProductCategoryAction,
   onDeleteProductAction,
   onUpdateLeadAction,
   onDeleteLeadAction,
@@ -212,6 +221,12 @@ export default function AdminDashboardClient({
   const [editingVendor, setEditingVendor] = useState<VendorRow | null>(null);
   const [deletingVendor, setDeletingVendor] = useState<VendorRow | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<ProductRow | null>(null);
+  const [editingProductCategory, setEditingProductCategory] = useState<ProductRow | null>(null);
+  const [productCategoryDraft, setProductCategoryDraft] = useState<VendorProductCategoryKey | "">("");
+  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
+  const categoryMenuRef = useRef<HTMLDivElement | null>(null);
+  const [isVendorStatusMenuOpen, setIsVendorStatusMenuOpen] = useState(false);
+  const vendorStatusMenuRef = useRef<HTMLDivElement | null>(null);
   const [selectedLead, setSelectedLead] = useState<LeadRow | null>(null);
   const [deletingLead, setDeletingLead] = useState<LeadRow | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -264,6 +279,62 @@ export default function AdminDashboardClient({
     setLeadPage(1);
   }, [leads.length]);
 
+  useEffect(() => {
+    if (!editingProductCategory || !isCategoryMenuOpen) {
+      return;
+    }
+
+    function handleOutsideClick(event: MouseEvent) {
+      if (!categoryMenuRef.current) {
+        return;
+      }
+      if (!categoryMenuRef.current.contains(event.target as Node)) {
+        setIsCategoryMenuOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsCategoryMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [editingProductCategory, isCategoryMenuOpen]);
+
+  useEffect(() => {
+    if (!editingVendor || !isVendorStatusMenuOpen) {
+      return;
+    }
+
+    function handleOutsideClick(event: MouseEvent) {
+      if (!vendorStatusMenuRef.current) {
+        return;
+      }
+      if (!vendorStatusMenuRef.current.contains(event.target as Node)) {
+        setIsVendorStatusMenuOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsVendorStatusMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [editingVendor, isVendorStatusMenuOpen]);
+
   const activeVendors = vendors.filter((vendor) => vendor.status === "Active").length;
   const inactiveVendors = vendors.filter((vendor) => vendor.status === "Inactive").length;
   const lockedVendors = vendors.filter((vendor) => vendor.status === "Locked").length;
@@ -294,6 +365,11 @@ export default function AdminDashboardClient({
 
     return matchesFilter && matchesSearch;
   });
+
+  const categoryLabelByKey = useMemo(
+    () => new Map(VENDOR_PRODUCT_CATEGORIES.map((category) => [category.key, category.label])),
+    []
+  );
 
   const filteredCatalogueVendors = vendors.filter((vendor) => {
     const query = catalogueSearch.trim().toLowerCase();
@@ -425,6 +501,43 @@ export default function AdminDashboardClient({
       }
 
       toast.success("Product deleted successfully.");
+      router.refresh();
+    });
+  }
+
+  function saveProductCategory() {
+    if (!editingProductCategory || !productCategoryDraft) {
+      return;
+    }
+
+    setActionError(null);
+    startTransition(async () => {
+      const result = await onUpdateProductCategoryAction({
+        productId: editingProductCategory.id,
+        categoryKey: productCategoryDraft as VendorProductCategoryKey,
+      });
+
+      if (!result.ok) {
+        setActionError(result.error ?? "Unable to update product category.");
+        toast.error(result.error ?? "Unable to update product category.");
+        return;
+      }
+
+      setProducts((current) =>
+        current.map((product) =>
+          product.id === editingProductCategory.id
+            ? {
+                ...product,
+                categoryKey: productCategoryDraft as VendorProductCategoryKey,
+                category: categoryLabelByKey.get(productCategoryDraft as VendorProductCategoryKey) ?? product.category,
+              }
+            : product
+        )
+      );
+      toast.success("Product category updated.");
+      setEditingProductCategory(null);
+      setProductCategoryDraft("");
+      setIsCategoryMenuOpen(false);
       router.refresh();
     });
   }
@@ -1191,26 +1304,40 @@ export default function AdminDashboardClient({
                           />
                         </td>
                         <td className="rounded-r-2xl px-4 py-4">
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => toggleProductVisibility(product.id)}
-                              disabled={isPending}
-                              className="rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2 text-sm font-medium text-[var(--black)] transition hover:bg-[var(--secondary)]"
-                            >
-                              {product.hidden ? "Unhide" : "Hide"}
-                            </button>
+                          <div className="flex flex-col gap-2">
                             <button
                               type="button"
                               onClick={() => {
                                 setActionError(null);
-                                setDeletingProduct(product);
+                                setEditingProductCategory(product);
+                                setProductCategoryDraft(product.categoryKey);
                               }}
                               disabled={isPending}
-                              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100"
+                              className="rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2 text-sm font-medium text-[var(--black)] transition hover:bg-[var(--secondary)]"
                             >
-                              Delete
+                              Change Category
                             </button>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => toggleProductVisibility(product.id)}
+                                disabled={isPending}
+                                className="rounded-xl border border-[var(--lightgray)] bg-white px-3 py-2 text-sm font-medium text-[var(--black)] transition hover:bg-[var(--secondary)]"
+                              >
+                                {product.hidden ? "Unhide" : "Hide"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActionError(null);
+                                  setDeletingProduct(product);
+                                }}
+                                disabled={isPending}
+                                className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -1310,7 +1437,7 @@ export default function AdminDashboardClient({
 
       {editingVendor ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-2xl rounded-[28px] bg-white p-6 shadow-2xl">
+          <div className="w-full max-w-lg rounded-[28px] bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-2xl font-semibold text-[var(--black)]">Edit Vendor Profile</h3>
@@ -1323,8 +1450,9 @@ export default function AdminDashboardClient({
                 onClick={() => {
                   setActionError(null);
                   setEditingVendor(null);
+                  setIsVendorStatusMenuOpen(false);
                 }}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--lightgray)]"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--black)] text-white shadow-sm"
               >
                 <X size={18} />
               </button>
@@ -1349,18 +1477,52 @@ export default function AdminDashboardClient({
               </label>
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-[var(--black)]">Status</span>
-                <select
-                  value={editingVendor.status}
-                  onChange={(event) =>
-                    updateVendorField("status", event.target.value as VendorRow["status"])
-                  }
-                  className="w-full rounded-xl border border-[var(--lightgray)] px-3 py-2.5 text-sm text-[var(--black)] outline-none focus:border-[var(--primary)]"
-                >
-                  <option>Active</option>
-                  <option>Inactive</option>
-                  <option>Locked</option>
-                  <option>Pending</option>
-                </select>
+                <div className="relative" ref={vendorStatusMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsVendorStatusMenuOpen((current) => !current)}
+                    className="flex w-full items-center justify-between rounded-2xl border border-[#d7cfc4] bg-[#fcfaf7] px-3 py-3 text-sm font-semibold text-[var(--black)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.7)] transition focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
+                    aria-haspopup="listbox"
+                    aria-expanded={isVendorStatusMenuOpen}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Tag size={16} className="text-[var(--darkgray)]" />
+                      {editingVendor.status}
+                    </span>
+                    <ChevronDown size={16} className="text-[var(--darkgray)]" />
+                  </button>
+
+                  {isVendorStatusMenuOpen ? (
+                    <div
+                      className="absolute left-0 right-0 z-10 mt-2 max-h-48 overflow-auto rounded-2xl border border-[#eadfd2] bg-white p-2 shadow-xl"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {(["Active", "Inactive", "Locked", "Pending"] as const).map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          onPointerDown={(event) => {
+                            event.preventDefault();
+                            updateVendorField("status", status);
+                            setIsVendorStatusMenuOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
+                            editingVendor.status === status
+                              ? "bg-[#f7efe6] text-[var(--primary)]"
+                              : "text-[var(--black)] hover:bg-[#f7f1e8]"
+                          }`}
+                          role="option"
+                          aria-selected={editingVendor.status === status}
+                        >
+                          <span>{status}</span>
+                          {editingVendor.status === status ? (
+                            <span className="text-[10px] font-semibold uppercase tracking-wide">Selected</span>
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </label>
               <label className="block md:col-span-2">
                 <span className="mb-1 block text-sm font-medium text-[var(--black)]">Address</span>
@@ -1382,16 +1544,6 @@ export default function AdminDashboardClient({
               <div className="rounded-xl border border-[var(--lightgray)] bg-[var(--secondary)] px-3 py-2.5">
                 <span className="mb-1 block text-sm font-medium text-[var(--black)]">Products</span>
                 <p className="text-sm text-[var(--darkgray)]">{editingVendor.products} products linked to this vendor</p>
-              </div>
-              <div className="rounded-xl border border-[var(--lightgray)] bg-[var(--secondary)] px-3 py-2.5 md:col-span-2">
-                <span className="mb-1 block text-sm font-medium text-[var(--black)]">Catalogue Analytics</span>
-                <div className="grid gap-2 text-sm text-[var(--darkgray)] md:grid-cols-2">
-                  <p><span className="font-medium text-[var(--black)]">Slug:</span> {editingVendor.catalogueSlug}</p>
-                  <p><span className="font-medium text-[var(--black)]">Shares:</span> {editingVendor.catalogueShares}</p>
-                  <p><span className="font-medium text-[var(--black)]">Views:</span> {editingVendor.catalogueViews}</p>
-                  <p><span className="font-medium text-[var(--black)]">Last Shared:</span> {editingVendor.lastSharedAt}</p>
-                  <p><span className="font-medium text-[var(--black)]">Last Viewed:</span> {editingVendor.lastViewedAt}</p>
-                </div>
               </div>
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-[var(--black)]">Mobile</span>
@@ -1522,6 +1674,111 @@ export default function AdminDashboardClient({
                 className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-medium text-white"
               >
                 {isPending ? "Deleting..." : "Yes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editingProductCategory ? (
+        <div className="fixed inset-0 z-[96] flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-lg rounded-[28px] bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-semibold text-[var(--black)]">Change Product Category</h3>
+                <p className="mt-1 text-sm text-[var(--darkgray)]">
+                  Update the category for <span className="font-medium text-[var(--black)]">{editingProductCategory.imageName}</span>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActionError(null);
+                  setEditingProductCategory(null);
+                  setProductCategoryDraft("");
+                  setIsCategoryMenuOpen(false);
+                }}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--black)] text-white shadow-sm"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-5">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-[var(--black)]">Category</span>
+                <div className="relative" ref={categoryMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsCategoryMenuOpen((current) => !current)}
+                    className="flex w-full items-center justify-between rounded-2xl border border-[#d7cfc4] bg-[#fcfaf7] px-3 py-3 text-sm font-semibold text-[var(--black)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.7)] transition focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
+                    aria-haspopup="listbox"
+                    aria-expanded={isCategoryMenuOpen}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Tag size={16} className="text-[var(--darkgray)]" />
+                      {productCategoryDraft
+                        ? categoryLabelByKey.get(productCategoryDraft as VendorProductCategoryKey) ?? "Select a category"
+                        : "Select a category"}
+                    </span>
+                    <ChevronDown size={16} className="text-[var(--darkgray)]" />
+                  </button>
+
+                  {isCategoryMenuOpen ? (
+                    <div
+                      className="absolute left-0 right-0 z-10 mt-2 max-h-64 overflow-auto rounded-2xl border border-[#eadfd2] bg-white p-2 shadow-xl"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {VENDOR_PRODUCT_CATEGORIES.map((category) => (
+                        <button
+                          key={category.key}
+                          type="button"
+                          onPointerDown={(event) => {
+                            event.preventDefault();
+                            setProductCategoryDraft(category.key);
+                            setIsCategoryMenuOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
+                            productCategoryDraft === category.key
+                              ? "bg-[#f7efe6] text-[var(--primary)]"
+                              : "text-[var(--black)] hover:bg-[#f7f1e8]"
+                          }`}
+                          role="option"
+                          aria-selected={productCategoryDraft === category.key}
+                        >
+                          <span>{category.label}</span>
+                          {productCategoryDraft === category.key ? (
+                            <span className="text-[10px] font-semibold uppercase tracking-wide">Selected</span>
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <p className="mt-2 text-xs text-[var(--darkgray)]">Choose the correct category for this product.</p>
+              </label>
+            </div>
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setActionError(null);
+                  setEditingProductCategory(null);
+                  setProductCategoryDraft("");
+                }}
+                disabled={isPending}
+                className="rounded-xl border border-[var(--lightgray)] px-4 py-2.5 text-sm font-medium text-[var(--black)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveProductCategory}
+                disabled={isPending || !productCategoryDraft}
+                className="rounded-xl bg-[var(--black)] px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isPending ? "Saving..." : "Save Category"}
               </button>
             </div>
           </div>

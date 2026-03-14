@@ -15,9 +15,11 @@ import {
   VENDOR_PRODUCT_ALLOWED_MIME_TYPES,
   VENDOR_PRODUCT_BATCH_MAX_FILES,
   VENDOR_PRODUCT_IMAGE_MAX_SIZE_BYTES,
+  VENDOR_PRODUCT_CATEGORY_KEYS,
   isVendorProductCategoryKey,
   type VendorProductCategoryKey,
 } from "@/lib/vendor-product-categories";
+import { sendNewProductsAlert, sendNewVendorAlert } from "@/lib/admin-alerts";
 
 function buildRedirect(path: string, params: Record<string, string | undefined>) {
   const search = new URLSearchParams();
@@ -312,6 +314,19 @@ export async function vendorRegisterAction(formData: FormData) {
 
     await updateVendorLastLogin(vendor._id.toString());
     await setVendorAuthCookie(vendor._id.toString(), vendor.mobile);
+    try {
+      await sendNewVendorAlert({
+        name: vendor.name,
+        companyName: vendor.company_name,
+        mobile: vendor.mobile,
+        address: vendor.address ?? null,
+        registeredAt: vendor.created_at,
+        status: vendor.status,
+      });
+    } catch (error) {
+      console.error("[alerts] New vendor email failed:", error);
+      // Email failures shouldn't block registration.
+    }
     redirect("/vendor/dashboard");
   } catch (error) {
     if (error instanceof MongoServerError && error.code === 11000) {
@@ -413,6 +428,28 @@ export async function vendorCreateCategorizedProductsAction(formData: FormData) 
   } catch {
     await removeUploadedImages(imageUrls);
     redirect("/vendor/dashboard?tab=products&error=image_upload_failed");
+  }
+
+  try {
+    const counts = new Map<VendorProductCategoryKey, number>();
+    for (const key of VENDOR_PRODUCT_CATEGORY_KEYS) {
+      counts.set(key, 0);
+    }
+    for (const [index, categoryKey] of assignmentMap.entries()) {
+      if (index < imageFiles.length && isVendorProductCategoryKey(categoryKey)) {
+        counts.set(categoryKey, (counts.get(categoryKey) ?? 0) + 1);
+      }
+    }
+    await sendNewProductsAlert({
+      vendorName: vendor.name,
+      companyName: vendor.company_name,
+      mobile: vendor.mobile,
+      totalImages: imageFiles.length,
+      categoryCounts: Array.from(counts.entries()).map(([key, count]) => ({ key, count })),
+      createdAt: new Date(),
+    });
+  } catch {
+    // Email failures shouldn't block uploads.
   }
 
   revalidatePath("/vendor");

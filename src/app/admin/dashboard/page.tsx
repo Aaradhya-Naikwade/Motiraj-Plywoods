@@ -7,6 +7,7 @@ import {
   adminDeleteVendorAction,
   adminLogoutAction,
   adminToggleProductVisibilityAction,
+  adminUpdateProductCategoryAction,
   adminUpdateLeadAction,
   adminUpdateVendorAction,
 } from "../actions";
@@ -124,6 +125,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
 
   const initialProducts: ProductRow[] = products.map((product) => ({
     id: product._id.toString(),
+    categoryKey: product.category_key,
     category: getVendorProductCategoryLabel(product.category_key),
     imageName: product.image_name,
     vendor: vendorNameById.get(product.vendor_id.toString()) ?? "Unknown Vendor",
@@ -159,6 +161,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
       onUpdateVendorAction={adminUpdateVendorAction}
       onDeleteVendorAction={adminDeleteVendorAction}
       onToggleProductVisibilityAction={adminToggleProductVisibilityAction}
+      onUpdateProductCategoryAction={adminUpdateProductCategoryAction}
       onDeleteProductAction={adminDeleteProductAction}
       onUpdateLeadAction={adminUpdateLeadAction}
       onDeleteLeadAction={adminDeleteLeadAction}

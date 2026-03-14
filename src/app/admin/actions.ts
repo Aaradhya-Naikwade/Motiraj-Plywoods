@@ -9,11 +9,13 @@ import { deleteLead, updateLead } from "@/lib/lead-repo";
 import { adminUpdateVendor, deleteVendorById, findVendorById } from "@/lib/vendor-repo";
 import {
   adminDeleteVendorProduct,
+  adminSetVendorProductCategory,
   adminSetVendorProductHidden,
   deleteVendorProductsByVendorId,
   getVendorProductImageUrls,
 } from "@/lib/vendor-product-repo";
 import { removeUploadedImages } from "@/lib/vendor-product-images";
+import { VENDOR_PRODUCT_CATEGORY_KEYS, type VendorProductCategoryKey } from "@/lib/vendor-product-categories";
 
 function parseDobInput(input: string): Date | null {
   const value = input.trim();
@@ -161,6 +163,26 @@ export async function adminToggleProductVisibilityAction(input: {
   await requireAdminSession();
 
   const updated = await adminSetVendorProductHidden(input.productId, input.hidden);
+  if (!updated) {
+    return { ok: false, error: "Product not found." };
+  }
+
+  revalidatePath("/admin/dashboard");
+  revalidatePath("/vendor");
+  return { ok: true };
+}
+
+export async function adminUpdateProductCategoryAction(input: {
+  productId: string;
+  categoryKey: VendorProductCategoryKey;
+}) {
+  await requireAdminSession();
+
+  if (!VENDOR_PRODUCT_CATEGORY_KEYS.includes(input.categoryKey)) {
+    return { ok: false, error: "Invalid category selected." };
+  }
+
+  const updated = await adminSetVendorProductCategory(input.productId, input.categoryKey);
   if (!updated) {
     return { ok: false, error: "Product not found." };
   }

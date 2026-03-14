@@ -198,6 +198,23 @@ export async function adminSetVendorProductHidden(productId: string, hidden: boo
   return result.matchedCount > 0;
 }
 
+export async function adminSetVendorProductCategory(
+  productId: string,
+  categoryKey: VendorProductCategoryKey
+): Promise<boolean> {
+  if (!ObjectId.isValid(productId)) {
+    return false;
+  }
+
+  const collection = await getProductCollection();
+  const result = await collection.updateOne(
+    { _id: new ObjectId(productId) },
+    { $set: { category_key: categoryKey, updated_at: new Date() } }
+  );
+
+  return result.matchedCount > 0;
+}
+
 export async function adminDeleteVendorProduct(productId: string): Promise<VendorProductDocument | null> {
   if (!ObjectId.isValid(productId)) {
     return null;
