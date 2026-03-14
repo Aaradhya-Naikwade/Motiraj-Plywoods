@@ -1,8 +1,20 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, ChevronDown, Grip, ImagePlus, Loader2, MousePointerClick, Trash2, UploadCloud } from "lucide-react";
+import type { ReactNode } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  rectIntersection,
+} from "@dnd-kit/core";
+import { CheckCircle2, Grip, ImagePlus, Loader2, Trash2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import {
   VENDOR_PRODUCT_ALLOWED_MIME_TYPES,
@@ -24,7 +36,7 @@ type PendingImage = {
   categoryKey: VendorProductCategoryKey | null;
 };
 
-const INTERNAL_DRAG_KEY = "application/x-vendor-image-key";
+type DroppableZoneId = "unassigned" | `category:${VendorProductCategoryKey}`;
 
 function makeFileKey(file: File) {
   return `${file.name}-${file.size}-${file.lastModified}`;
@@ -40,10 +52,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [draggedKey, setDraggedKey] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isTouch, setIsTouch] = useState(false);
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  const [selectedCategory, setSelectedCategory] = useState<VendorProductCategoryKey | "">("");
-  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const syncInputFiles = (files: File[]) => {
     if (!inputRef.current) {
@@ -85,7 +94,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
         if (knownKeys.has(key)) {
           continue;
         }
-        
+
         if (next.length >= VENDOR_PRODUCT_BATCH_MAX_FILES) {
           toast.error(`You can add up to ${VENDOR_PRODUCT_BATCH_MAX_FILES} images in one batch.`);
           break;
@@ -141,33 +150,6 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
     );
   };
 
-  const assignCategoryBulk = (keys: string[], categoryKey: VendorProductCategoryKey | null) => {
-    if (isSubmitting || keys.length === 0) {
-      return;
-    }
-
-    const keySet = new Set(keys);
-    setPendingImages((current) =>
-      current.map((image) => (keySet.has(image.key) ? { ...image, categoryKey } : image))
-    );
-  };
-
-  const toggleSelectedKey = (key: string) => {
-    setSelectedKeys((current) => {
-      const next = new Set(current);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
-  };
-
-  const clearSelection = () => {
-    setSelectedKeys(new Set());
-  };
-
   const handleDropToCategory = (event: React.DragEvent<HTMLDivElement>, categoryKey: VendorProductCategoryKey | null) => {
     event.preventDefault();
     event.stopPropagation();
@@ -176,13 +158,12 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
       return;
     }
 
-    const internalKey = event.dataTransfer.getData(INTERNAL_DRAG_KEY);
-    if (internalKey) {
-      assignCategory(internalKey, categoryKey);
-      setDraggedKey(null);
+    const hasFiles =
+      event.dataTransfer?.types?.includes?.("Files") &&
+      (event.dataTransfer.files?.length ?? 0) > 0;
+    if (!hasFiles) {
       return;
     }
-
     const droppedFiles = Array.from(event.dataTransfer.files ?? []);
     if (droppedFiles.length > 0) {
       addFiles(droppedFiles);
@@ -194,10 +175,6 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
   }, [pendingImages]);
 
   useEffect(() => {
-    const isTouchDevice =
-      typeof window !== "undefined" &&
-      ("ontouchstart" in window || window.matchMedia?.("(pointer: coarse)")?.matches);
-    setIsTouch(Boolean(isTouchDevice));
     return () => {
       pendingImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
     };
@@ -216,11 +193,31 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
   const unassignedCount = pendingImages.filter((image) => !image.categoryKey).length;
   const assignedCount = pendingImages.length - unassignedCount;
   const totalBatchSizeBytes = pendingImages.reduce((sum, image) => sum + image.file.size, 0);
-  const selectedCount = selectedKeys.size;
-  const canAssignSelected = selectedCount > 0 && selectedCategory !== "";
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 12 } })
+  );
+
+  const getCategoryKeyFromZone = (zoneId: DroppableZoneId | null) => {
+    if (!zoneId) {
+      return null;
+    }
+    if (zoneId === "unassigned") {
+      return null;
+    }
+    if (zoneId.startsWith("category:")) {
+      return zoneId.replace("category:", "") as VendorProductCategoryKey;
+    }
+    return null;
+  };
+
+  const activeImage = activeId
+    ? pendingImages.find((image) => image.key === activeId) ?? null
+    : null;
 
   return (
-    <div className={`space-y-6 ${isTouch ? "pb-36" : ""}`}>
+    <div className="space-y-6">
       <div className="rounded-[32px] border border-white/80 bg-white/95 p-4 shadow-[0_24px_70px_-40px_rgba(73,36,10,0.42)] md:p-6">
         <form
           action={saveAction}
@@ -261,240 +258,211 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
           />
           <input type="hidden" name="assignments" value={assignmentsValue} />
 
-          <div
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              addFiles(Array.from(event.dataTransfer.files ?? []));
+          <DndContext
+            sensors={sensors}
+            collisionDetection={rectIntersection}
+            autoScroll
+            onDragStart={({ active }) => {
+              setActiveId(String(active.id));
+              setDraggedKey(String(active.id));
             }}
-            className={`relative ${isSubmitting ? "pointer-events-none" : ""}`}
+            onDragEnd={({ active, over }) => {
+              if (!over) {
+                setActiveId(null);
+                setDraggedKey(null);
+                return;
+              }
+              const activeKey = String(active.id);
+              const nextZone = String(over.id) as DroppableZoneId;
+              const nextCategory = getCategoryKeyFromZone(nextZone);
+              assignCategory(activeKey, nextCategory);
+              setActiveId(null);
+              setDraggedKey(null);
+            }}
+            onDragCancel={() => {
+              setActiveId(null);
+              setDraggedKey(null);
+            }}
           >
-            {isSubmitting ? (
-              <div className="absolute inset-0 z-20 flex items-center justify-center rounded-[28px] bg-[#f6f3ee]/90 backdrop-blur-[2px]">
-                <div className="flex min-w-[260px] items-center gap-4 rounded-2xl border border-[#d7cfc4] bg-white px-5 py-4 shadow-xl">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#efe9e1] text-[var(--primary)]">
-                    <Loader2 size={22} className="animate-spin" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-[var(--black)]">Uploading your gallery</p>
-                    <p className="mt-1 text-xs text-[var(--darkgray)]">Please wait while images are being saved.</p>
+            <div
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                const hasFiles =
+                  event.dataTransfer?.types?.includes?.("Files") &&
+                  (event.dataTransfer.files?.length ?? 0) > 0;
+                if (!hasFiles) {
+                  return;
+                }
+                addFiles(Array.from(event.dataTransfer.files ?? []));
+              }}
+              className={`relative ${isSubmitting ? "pointer-events-none" : ""}`}
+            >
+              {isSubmitting ? (
+                <div className="absolute inset-0 z-20 flex items-center justify-center rounded-[28px] bg-[#f6f3ee]/90 backdrop-blur-[2px]">
+                  <div className="flex min-w-[260px] items-center gap-4 rounded-2xl border border-[#d7cfc4] bg-white px-5 py-4 shadow-xl">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#efe9e1] text-[var(--primary)]">
+                      <Loader2 size={22} className="animate-spin" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--black)]">Uploading your gallery</p>
+                      <p className="mt-1 text-xs text-[var(--darkgray)]">Please wait while images are being saved.</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.9fr)_minmax(0,1.1fr)]">
-              <div
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => handleDropToCategory(event, null)}
-                className="rounded-[20px] border border-[#e6ddd2] bg-white p-4 xl:flex xl:flex-col"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-semibold text-[var(--black)]">Selected Images</h3>
-                    <p className="mt-1 text-xs text-[var(--darkgray)]">Unassigned images stay here.</p>
-                  </div>
-                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-[#eadfd2] bg-white px-2.5 py-1 text-[10px] font-semibold text-[var(--black)]">
-                        Selected {pendingImages.length}
-                      </span>
-                      <span className="hidden rounded-full border border-[#eadfd2] bg-white px-2.5 py-1 text-[10px] font-semibold text-[var(--black)] sm:inline-flex">
-                        Assigned {assignedCount}
-                      </span>
-                      <span className="hidden rounded-full border border-[#eadfd2] bg-white px-2.5 py-1 text-[10px] font-semibold text-[var(--black)] sm:inline-flex">
-                        Unassigned {unassignedCount}
-                      </span>
+              <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.9fr)_minmax(0,1.1fr)] min-w-0">
+                <DroppableZone
+                  id="unassigned"
+                  onDrop={(event) => handleDropToCategory(event, null)}
+                  className="rounded-[20px] border border-[#e6ddd2] bg-white p-4 xl:flex xl:flex-col min-w-0"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-semibold text-[var(--black)]">Selected Images</h3>
+                      <p className="mt-1 text-xs text-[var(--darkgray)]">Unassigned images stay here.</p>
                     </div>
-                    <button
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => inputRef.current?.click()}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[var(--primary)] px-3 py-2 text-xs font-semibold text-white shadow-md transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-                    >
-                      {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
-                      {isSubmitting ? "Uploading..." : "Choose Images"}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="scrollbar-hidden mt-3 min-h-[260px] rounded-[16px] bg-transparent p-0 sm:bg-[#f9f5ef] sm:p-3 xl:flex-1 xl:overflow-y-auto">
-                  {pendingImages.length === 0 ? (
-                    <div className="flex min-h-[224px] flex-col items-center justify-center gap-2 text-center text-[var(--darkgray)]">
-                      <UploadCloud size={28} />
-                      <p className="text-sm font-medium">No images selected</p>
-                      <p className="text-xs">Choose multiple files to start.</p>
-                    </div>
-                  ) : pendingImages.filter((image) => image.categoryKey === null).length === 0 ? (
-                    <div className="flex min-h-[224px] items-center justify-center rounded-2xl border border-dashed border-[#d9d0c4] text-center text-sm text-[var(--darkgray)]">
-                      All selected images are assigned. Drop any image here to unassign it.
-                    </div>
-                  ) : (
-                    <div className="grid gap-2 grid-cols-2 sm:grid-cols-2">
-                      {pendingImages
-                        .filter((image) => image.categoryKey === null)
-                        .map((image) => (
-                          <div
-                            key={image.key}
-                            draggable={!isSubmitting && !isTouch}
-                            onClick={() => {
-                              if (isTouch) {
-                                toggleSelectedKey(image.key);
-                              }
-                            }}
-                            onDragStart={(event) => {
-                              setDraggedKey(image.key);
-                              event.dataTransfer.setData(INTERNAL_DRAG_KEY, image.key);
-                              event.dataTransfer.effectAllowed = "move";
-                            }}
-                            onDragEnd={() => setDraggedKey(null)}
-                            className={`group rounded-2xl border p-2 shadow-sm transition ${
-                              draggedKey === image.key
-                                ? "border-[var(--primary)] bg-[#f7efe6]"
-                                : "border-[#e6ddd2] bg-[#faf8f4]"
-                            }`}
-                          >
-                            <div className="relative overflow-hidden rounded-xl">
-                              <Image
-                                src={image.previewUrl}
-                                alt={image.file.name}
-                                width={320}
-                                height={220}
-                                className="h-24 w-full rounded-xl object-cover"
-                                unoptimized
-                              />
-                              {isTouch && selectedKeys.has(image.key) ? (
-                                <span className={`absolute left-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${selectedKeys.has(image.key) ? "bg-[var(--primary)] text-white" : "bg-white/90 text-[var(--black)]"}`}>
-                                  x
-                                </span>
-                              ) : null}
-                              <button
-                                type="button"
-                                disabled={isSubmitting}
-                                onClick={() => removePendingImage(image.key)}
-                                className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </div>
-                            <div className="mt-2 hidden items-center justify-between gap-2 sm:flex">
-                              <p className="truncate text-xs font-medium text-[var(--black)]">{image.file.name}</p>
-                              <span className="hidden items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-[var(--primary)] sm:inline-flex">
-                                <Grip size={10} />
-                                Drag
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-[24px] border border-[#e6ddd2] bg-white p-4 xl:flex xl:flex-col">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-semibold text-[var(--black)]">Category Boxes</h3>
-                    <p className="mt-1 text-xs text-[var(--darkgray)]">Drop each image into one category.</p>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
-                  {VENDOR_PRODUCT_CATEGORIES.map((category) => {
-                    const categoryImages = pendingImages.filter((image) => image.categoryKey === category.key);
-                    return (
-                      <div
-                        key={category.key}
-                        onDragOver={(event) => event.preventDefault()}
-                        onDrop={(event) => handleDropToCategory(event, category.key)}
-                        className={`rounded-[18px] border p-3 transition ${
-                          categoryImages.length > 0
-                            ? "border-[#d8ccb9] bg-[#f7f1e8]"
-                            : "border-[#ece3d8] bg-[#fcfaf7]"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <h4 className="text-sm font-semibold text-[var(--black)]">{category.label}</h4>
-                            {categoryImages.length > 0 ? (
-                              <p className="mt-0.5 text-[10px] text-[var(--darkgray)]">Assigned images</p>
-                            ) : null}
-                          </div>
-                          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[var(--black)] shadow-sm">
-                            {categoryImages.length}
-                          </span>
-                        </div>
-
-                        {categoryImages.length === 0 ? (
-                          <p className="mt-2 text-[10px] text-[var(--darkgray)]">Drop images here</p>
-                        ) : (
-                          <div className="mt-3 grid gap-2 grid-cols-2 sm:grid-cols-2">
-                            {categoryImages.map((image) => (
-                              <div
-                              key={image.key}
-                                draggable={!isSubmitting && !isTouch}
-                                onClick={() => {
-                                  if (isTouch) {
-                                    toggleSelectedKey(image.key);
-                                  }
-                                }}
-                                onDragStart={(event) => {
-                                  setDraggedKey(image.key);
-                                  event.dataTransfer.setData(INTERNAL_DRAG_KEY, image.key);
-                                  event.dataTransfer.effectAllowed = "move";
-                                }}
-                                onDragEnd={() => setDraggedKey(null)}
-                                className={`rounded-2xl border p-2 shadow-sm transition ${
-                                  draggedKey === image.key
-                                    ? "border-[var(--primary)] bg-[#f7efe6]"
-                                    : "border-[#e6ddd2] bg-[#faf8f4]"
-                                }`}
-                              >
-                                <div className="relative overflow-hidden rounded-xl">
-                                  <Image
-                                    src={image.previewUrl}
-                                    alt={image.file.name}
-                                    width={320}
-                                    height={220}
-                                    className="h-16 w-full rounded-xl object-cover"
-                                    unoptimized
-                                  />
-                                  {isTouch && selectedKeys.has(image.key) ? (
-                                    <span className={`absolute left-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${selectedKeys.has(image.key) ? "bg-[var(--primary)] text-white" : "bg-white/90 text-[var(--black)]"}`}>
-                                      x
-                                    </span>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    disabled={isSubmitting}
-                                    onClick={() => removePendingImage(image.key)}
-                                    className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </div>
-                                <div className="mt-1.5 hidden items-center justify-between gap-2 sm:flex">
-                                  <p className="truncate text-[11px] font-medium text-[var(--black)]">{image.file.name}</p>
-                                  <button
-                                    type="button"
-                                    disabled={isSubmitting}
-                                    onClick={() => assignCategory(image.key, null)}
-                                    className="text-[10px] font-medium text-[var(--primary)] transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    Move back
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-[#eadfd2] bg-white px-2.5 py-1 text-[10px] font-semibold text-[var(--black)]">
+                          Selected {pendingImages.length}
+                        </span>
+                        <span className="hidden rounded-full border border-[#eadfd2] bg-white px-2.5 py-1 text-[10px] font-semibold text-[var(--black)] sm:inline-flex">
+                          Assigned {assignedCount}
+                        </span>
+                        <span className="hidden rounded-full border border-[#eadfd2] bg-white px-2.5 py-1 text-[10px] font-semibold text-[var(--black)] sm:inline-flex">
+                          Unassigned {unassignedCount}
+                        </span>
                       </div>
-                    );
-                  })}
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => inputRef.current?.click()}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[var(--primary)] px-3 py-2 text-xs font-semibold text-white shadow-md transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                      >
+                        {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
+                        {isSubmitting ? "Uploading..." : "Choose Images"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="scrollbar-hidden mt-3 min-h-[160px] w-full max-w-full overflow-hidden rounded-[16px] bg-[#f9f5ef] p-2 sm:min-h-[260px] sm:p-3 xl:flex-1 xl:overflow-y-auto">
+                    {pendingImages.length === 0 ? (
+                      <div className="flex min-h-[224px] flex-col items-center justify-center gap-2 text-center text-[var(--darkgray)]">
+                        <UploadCloud size={28} />
+                        <p className="text-sm font-medium">No images selected</p>
+                        <p className="text-xs">Choose multiple files to start.</p>
+                      </div>
+                    ) : pendingImages.filter((image) => image.categoryKey === null).length === 0 ? (
+                      <div className="flex min-h-[224px] items-center justify-center rounded-2xl border border-dashed border-[#d9d0c4] text-center text-sm text-[var(--darkgray)]">
+                        All selected images are assigned. Drop any image here to unassign it.
+                      </div>
+                    ) : (
+                      <div className="flex w-full max-w-full gap-2 overflow-x-auto pb-2 pr-2 touch-pan-x">
+                        {pendingImages
+                          .filter((image) => image.categoryKey === null)
+                          .map((image) => (
+                            <DraggableImageCard
+                              key={image.key}
+                              image={image}
+                              isSubmitting={isSubmitting}
+                              isDragging={draggedKey === image.key}
+                              onRemove={() => removePendingImage(image.key)}
+                              containerClassName="min-w-[120px] flex-shrink-0 sm:min-w-0 sm:flex-shrink"
+                              imageClassName="h-20 sm:h-24"
+                            />
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </DroppableZone>
+
+                <div className="rounded-[24px] border border-[#e6ddd2] bg-white p-4 xl:flex xl:flex-col">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-semibold text-[var(--black)]">Category Boxes</h3>
+                      <p className="mt-1 text-xs text-[var(--darkgray)]">Drop each image into one category.</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-2">
+                    {VENDOR_PRODUCT_CATEGORIES.map((category) => {
+                      const categoryImages = pendingImages.filter((image) => image.categoryKey === category.key);
+                      const zoneId = `category:${category.key}` as DroppableZoneId;
+                      return (
+                        <DroppableZone
+                          key={category.key}
+                          id={zoneId}
+                          onDrop={(event) => handleDropToCategory(event, category.key)}
+                          className={`rounded-[16px] border p-2 sm:rounded-[18px] sm:p-3 transition ${
+                            categoryImages.length > 0
+                              ? "border-[#d8ccb9] bg-[#f7f1e8]"
+                              : "border-[#ece3d8] bg-[#fcfaf7]"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <h4 className="text-[11px] font-semibold text-[var(--black)] sm:text-sm">{category.label}</h4>
+                              {categoryImages.length > 0 ? (
+                                <p className="mt-0.5 text-[10px] text-[var(--darkgray)]">Assigned images</p>
+                              ) : null}
+                            </div>
+                            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-[var(--black)] shadow-sm">
+                              {categoryImages.length}
+                            </span>
+                          </div>
+
+                          {categoryImages.length === 0 ? (
+                            <p className="mt-2 text-[10px] text-[var(--darkgray)]">Drop images here</p>
+                          ) : (
+                            <div className="mt-3 flex gap-2 overflow-x-auto pb-2 pr-1 touch-pan-x sm:grid sm:grid-cols-2">
+                              {categoryImages.map((image) => (
+                                <DraggableImageCard
+                                  key={image.key}
+                                  image={image}
+                                  isSubmitting={isSubmitting}
+                                  isDragging={draggedKey === image.key}
+                                  onRemove={() => removePendingImage(image.key)}
+                                  onMoveBack={() => assignCategory(image.key, null)}
+                                  containerClassName="min-w-[120px] sm:min-w-0"
+                                  imageClassName="h-16"
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </DroppableZone>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+
+            <DragOverlay>
+              {activeImage ? (
+                <div className="w-36 rounded-2xl border border-[#e6ddd2] bg-white p-2 shadow-xl">
+                  <div className="relative overflow-hidden rounded-xl">
+                    <Image
+                      src={activeImage.previewUrl}
+                      alt={activeImage.file.name}
+                      width={240}
+                      height={180}
+                      className="h-20 w-full rounded-xl object-cover"
+                      unoptimized
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <p className="truncate text-[10px] font-medium text-[var(--black)]">{activeImage.file.name}</p>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#f7efe6] px-2 py-1 text-[10px] font-semibold text-[var(--primary)]">
+                      <Grip size={10} />
+                      Drag
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
 
           <div className="rounded-[20px] border border-[#eadfd2] bg-white px-4 py-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -518,99 +486,113 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
               </button>
             </div>
           </div>
-
-          {isTouch ? (
-            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#eadfd2] bg-white/95 px-3 py-2 shadow-[0_-10px_24px_-18px_rgba(0,0,0,0.35)] backdrop-blur">
-              <div className="mx-auto flex max-w-5xl flex-col gap-2">
-                <div className="flex items-center justify-between text-[10px] font-semibold text-[var(--black)]">
-                  <span className="rounded-full border border-[#eadfd2] bg-white px-2 py-0.5">Selected {selectedCount}</span>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting || pendingImages.length === 0 || unassignedCount > 0}
-                    className="rounded-full bg-[var(--primary)] px-3 py-1 text-[10px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isSubmitting ? "Uploading..." : "Save"}
-                  </button>
-                </div>
-
-                <div className="flex w-full items-center gap-2">
-                  <div className="relative flex-1">
-                    <button
-                      type="button"
-                      onClick={() => setIsCategoryMenuOpen((current) => !current)}
-                      className="flex w-full items-center justify-between rounded-full border border-[#e6ddd2] bg-white px-3 py-2 text-[11px] font-semibold text-[var(--black)] shadow-sm"
-                    >
-                      <span className="truncate">
-                        {selectedCategory
-                          ? VENDOR_PRODUCT_CATEGORIES.find((category) => category.key === selectedCategory)?.label ?? "Move to category"
-                          : "Move to category"}
-                      </span>
-                      <ChevronDown size={14} className="text-[var(--darkgray)]" />
-                    </button>
-                    {isCategoryMenuOpen ? (
-                      <div className="absolute left-0 right-0 bottom-full z-10 mb-2 max-h-56 overflow-auto rounded-2xl border border-[#e6ddd2] bg-white p-2 shadow-lg">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCategory("");
-                            setIsCategoryMenuOpen(false);
-                          }}
-                          className="w-full rounded-xl px-3 py-2 text-left text-xs font-semibold text-[var(--darkgray)] hover:bg-[#f7f1e8]"
-                        >
-                          Move to category
-                        </button>
-                        {VENDOR_PRODUCT_CATEGORIES.map((category) => (
-                          <button
-                            key={category.key}
-                            type="button"
-                            onClick={() => {
-                              setSelectedCategory(category.key);
-                              setIsCategoryMenuOpen(false);
-                            }}
-                            className="w-full rounded-xl px-3 py-2 text-left text-xs font-semibold text-[var(--black)] hover:bg-[#f7f1e8]"
-                          >
-                            {category.label}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={!canAssignSelected}
-                    onClick={() => {
-                      if (!canAssignSelected) return;
-                      assignCategoryBulk(Array.from(selectedKeys), selectedCategory);
-                      toast.success(`Assigned to ${VENDOR_PRODUCT_CATEGORIES.find((c) => c.key === selectedCategory)?.label ?? "category"}.`);
-                      setSelectedCategory("");
-                      clearSelection();
-                    }}
-                    className="rounded-full bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Assign
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={selectedCount === 0}
-                  onClick={() => {
-                    if (selectedCount === 0) return;
-                    assignCategoryBulk(Array.from(selectedKeys), null);
-                    toast.success("Moved back to unassigned.");
-                    clearSelection();
-                  }}
-                  className="w-full rounded-full border border-[#eadfd2] bg-white px-3 py-2 text-[11px] font-semibold text-[var(--black)] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Move back
-                </button>
-              </div>
+          <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#eadfd2] bg-white/95 px-4 py-3 shadow-[0_-10px_24px_-18px_rgba(0,0,0,0.35)] backdrop-blur sm:hidden">
+            <div className="mx-auto flex max-w-5xl justify-center">
+              <button
+                type="submit"
+                disabled={isSubmitting || pendingImages.length === 0 || unassignedCount > 0}
+                className="inline-flex items-center gap-2 rounded-full bg-[var(--primary)] px-7 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_-16px_rgba(73,36,10,0.6)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : null}
+                {isSubmitting ? "Uploading..." : "Save"}
+              </button>
             </div>
-          ) : null}
+          </div>
         </form>
       </div>
     </div>
   );
 }
 
+type DroppableZoneProps = {
+  id: DroppableZoneId;
+  className: string;
+  onDrop: (event: React.DragEvent<HTMLDivElement>) => void;
+  children: ReactNode;
+};
+
+function DroppableZone({ id, className, onDrop, children }: DroppableZoneProps) {
+  const { isOver, setNodeRef } = useDroppable({ id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={onDrop}
+      className={`${className} ${isOver ? "ring-2 ring-[var(--primary)]/50" : ""}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+type DraggableImageCardProps = {
+  image: PendingImage;
+  isSubmitting: boolean;
+  isDragging: boolean;
+  onRemove: () => void;
+  onMoveBack?: () => void;
+  containerClassName?: string;
+  imageClassName?: string;
+};
+
+function DraggableImageCard({
+  image,
+  isSubmitting,
+  isDragging,
+  onRemove,
+  onMoveBack,
+  containerClassName,
+  imageClassName,
+}: DraggableImageCardProps) {
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: image.key });
+
+  const style = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
+    : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`group rounded-2xl border p-2 shadow-sm transition ${containerClassName ?? ""} ${
+        isDragging
+          ? "border-[var(--primary)] bg-[#f7efe6] opacity-30"
+          : "border-[#e6ddd2] bg-[#faf8f4]"
+      }`}
+      {...attributes}
+      {...listeners}
+    >
+      <div className="relative overflow-hidden rounded-xl">
+        <Image
+          src={image.previewUrl}
+          alt={image.file.name}
+          width={320}
+          height={220}
+          className={`w-full rounded-xl object-cover ${imageClassName ?? "h-24"}`}
+          unoptimized
+          draggable={false}
+        />
+        <button
+          type="button"
+          disabled={isSubmitting}
+          onClick={onRemove}
+          className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
+      <div className="mt-2 h-2" aria-hidden="true" />
+      {onMoveBack ? (
+        <button
+          type="button"
+          disabled={isSubmitting}
+          onClick={onMoveBack}
+          className="mt-2 text-[10px] font-medium text-[var(--primary)] transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Move back
+        </button>
+      ) : null}
+    </div>
+  );
+}

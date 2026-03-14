@@ -148,12 +148,14 @@ export default async function VendorDashboardPage({ searchParams }: VendorDashbo
     <>
       <DashboardAlerts status={params.status} error={params.error} />
       <VendorDashboardShell activeTab={activeTab} companyName={vendor.company_name} status={vendor.status} onLogoutAction={vendorLogoutAction}>
-        <VendorCatalogueTools
-          cataloguePath={`/vendor/catalogue/${vendor.catalogue_slug}`}
-          companyName={vendor.company_name}
-          hasProducts={products.length > 0}
-          onTrackShareAction={vendorTrackCatalogueShareAction}
-        />
+        {activeTab !== "add-products" ? (
+          <VendorCatalogueTools
+            cataloguePath={`/vendor/catalogue/${vendor.catalogue_slug}`}
+            companyName={vendor.company_name}
+            hasProducts={products.length > 0}
+            onTrackShareAction={vendorTrackCatalogueShareAction}
+          />
+        ) : null}
         {activeTab === "analytics" ? (
           <div className="space-y-4 md:space-y-5">
             <div className="relative overflow-hidden rounded-[28px] border border-white/80 bg-white/95 p-5 shadow-[0_22px_60px_-42px_rgba(73,36,10,0.45)] md:p-6">
