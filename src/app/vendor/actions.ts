@@ -417,7 +417,7 @@ export async function vendorCreateCategorizedProductsAction(formData: FormData) 
 
   revalidatePath("/vendor");
   revalidatePath("/admin/dashboard");
-  redirect("/vendor/dashboard?tab=products&status=product_created");
+  redirect("/vendor/dashboard?tab=analytics&status=product_created");
 }
 
 export async function vendorDeleteProductAction(formData: FormData) {

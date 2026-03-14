@@ -359,7 +359,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                         All selected images are assigned. Drop any image here to unassign it.
                       </div>
                     ) : (
-                      <div className="flex w-full max-w-full gap-2 overflow-x-auto pb-2 pr-2 touch-pan-x">
+                      <div className="flex w-full max-w-full gap-2 overflow-x-auto pb-2 pr-2 touch-pan-x sm:flex-wrap sm:overflow-x-visible sm:pb-0 sm:pr-0">
                         {pendingImages
                           .filter((image) => image.categoryKey === null)
                           .map((image) => (
@@ -369,7 +369,7 @@ export default function ProductCategoryManager({ saveAction }: ProductCategoryMa
                               isSubmitting={isSubmitting}
                               isDragging={draggedKey === image.key}
                               onRemove={() => removePendingImage(image.key)}
-                              containerClassName="min-w-[120px] flex-shrink-0 sm:min-w-0 sm:flex-shrink"
+                              containerClassName="min-w-[120px] flex-shrink-0 sm:min-w-[140px] sm:flex-shrink"
                               imageClassName="h-20 sm:h-24"
                             />
                           ))}
