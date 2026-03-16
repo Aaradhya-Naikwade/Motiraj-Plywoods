@@ -1,11 +1,11 @@
 
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Search, Menu, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { Search, Menu, X } from "lucide-react";
 
 type HeaderProps = {
   isVendorLoggedIn: boolean;
@@ -13,7 +13,16 @@ type HeaderProps = {
 
 const Header = ({ isVendorLoggedIn }: HeaderProps) => {
   const pathname = usePathname();
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<
+    Array<{ id: string; name: string; category: string; type: string; url: string; source: string }>
+  >([]);
+  const [totalResults, setTotalResults] = useState(0);
+  const [searchMessage, setSearchMessage] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [suppressSuggestions, setSuppressSuggestions] = useState(false);
   const isVendorsActive = pathname === "/vendor";
   const isHomeActive = pathname === "/";
   const isAboutActive = pathname === "/about";
@@ -24,10 +33,6 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
     pathname.startsWith("/vendor/auth/") ||
     pathname === "/vendor/signup" ||
     pathname.startsWith("/vendor/signup/");
-
-  if (shouldHideHeader) {
-    return null;
-  }
     
   const navItem =
     "px-4 py-1.5 rounded-full transition-all duration-200 text-amber-800";
@@ -35,8 +40,111 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
   const activeNav =
     "bg-black text-white px-4 py-1.5 rounded-full";
 
+  const hasQuery = searchQuery.trim().length > 0;
+  const shouldShowSuggestions = useMemo(
+    () =>
+      !suppressSuggestions &&
+      hasQuery &&
+      (suggestions.length > 0 || isSearching || totalResults === 0 || searchMessage.length > 0),
+    [hasQuery, suggestions, isSearching, totalResults, searchMessage, suppressSuggestions]
+  );
+
+  const groupedSuggestions = useMemo(() => {
+    const pdfs = suggestions.filter((item) => item.type === "pdf");
+    const vendorImages = suggestions.filter((item) => item.type === "image" && item.source === "vendor");
+    const staticImages = suggestions.filter((item) => item.type === "image" && item.source !== "vendor");
+    return { pdfs, vendorImages, staticImages };
+  }, [suggestions]);
+
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      setSuggestions([]);
+      setTotalResults(0);
+      setSearchMessage("");
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(async () => {
+      try {
+        setIsSearching(true);
+        const response = await fetch(
+          `/api/catalog/search?query=${encodeURIComponent(trimmed)}&limit=8`,
+          { signal: controller.signal }
+        );
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error("Search failed");
+        }
+        setSuggestions(Array.isArray(data.results) ? data.results : []);
+        setTotalResults(typeof data.total === "number" ? data.total : 0);
+        setSearchMessage("");
+      } catch (error) {
+        if ((error as Error).name === "AbortError") {
+          return;
+        }
+        setSuggestions([]);
+        setTotalResults(0);
+        setSearchMessage("Unable to load search results.");
+      } finally {
+        setIsSearching(false);
+      }
+    }, 200);
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [searchQuery]);
+
+  async function handleSearchSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery) {
+      return;
+    }
+    setSuppressSuggestions(true);
+    setSuggestions([]);
+    setSearchMessage("");
+    try {
+      setIsSearching(true);
+      const response = await fetch(
+        `/api/catalog/search?query=${encodeURIComponent(trimmedQuery)}&limit=1`
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error("Search failed");
+      }
+      const total = typeof data.total === "number" ? data.total : 0;
+      if (total === 0) {
+        setSearchMessage("No such results found.");
+        return;
+      }
+    } catch {
+      setSearchMessage("Unable to search right now.");
+      return;
+    } finally {
+      setIsSearching(false);
+    }
+    setIsOpen(false);
+    router.push(`/catalog?query=${encodeURIComponent(trimmedQuery)}`);
+  }
+
+  function handleSuggestionClick(name: string) {
+    setSuppressSuggestions(true);
+    setSearchQuery(name);
+    setSuggestions([]);
+    setIsOpen(false);
+    router.push(`/catalog?query=${encodeURIComponent(name)}`);
+  }
+
+  if (shouldHideHeader) {
+    return null;
+  }
+
   return (
-    <header className="w-full font-sans relative z-50">
+    <header className="w-full font-sans relative z-[200]">
       {/* Top Banner */}
       <div className="overflow-hidden bg-[var(--primary)] py-1.5 text-white">
         <div className="flex w-max whitespace-nowrap text-xs md:text-sm">
@@ -77,17 +185,73 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
         </div>
 
         {/* Search (Desktop) */}
-        <div className="hidden md:block flex-1 max-w-xs relative">
-          <input
-            type="text"
-            placeholder="Search..."
-            className="w-full border border-gray-400 rounded-full py-1.5 px-10 bg-transparent focus:outline-none"
-          />
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
-            size={18}
-          />
-        </div>
+        <form onSubmit={handleSearchSubmit} className="hidden md:block flex-1 max-w-sm relative">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search"
+              value={searchQuery}
+              onChange={(event) => {
+                setSuppressSuggestions(false);
+                setSearchQuery(event.target.value);
+              }}
+              className="w-full rounded-full border border-[#dbcbb8] bg-white/80 py-2.5 pl-11 pr-12 text-sm text-black shadow-[0_10px_40px_-32px_rgba(68,40,6,0.45)] backdrop-blur focus:border-[#b58a61] focus:outline-none"
+              aria-label="Search products and catalogues"
+            />
+            <Search
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8b3e12]"
+              size={18}
+            />
+            <button
+              type="submit"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8b3e12]"
+              aria-label="Search"
+            >
+              <Search size={16} />
+            </button>
+          </div>
+
+          {shouldShowSuggestions ? (
+            <div className="absolute left-0 right-0 top-full z-[300] mt-3 overflow-hidden rounded-[22px] border border-[#e7dccf] bg-white shadow-[0_28px_70px_-40px_rgba(67,38,6,0.45)]">
+              {searchMessage ? (
+                <div className="px-4 py-5 text-sm text-red-600">{searchMessage}</div>
+              ) : null}
+
+              {!isSearching && totalResults === 0 && !searchMessage ? (
+                <div className="px-4 py-5 text-sm text-[#6b5f52]">No results yet. Try a different keyword.</div>
+              ) : null}
+
+              <div className="max-h-80 overflow-y-auto py-3">
+                {[...groupedSuggestions.pdfs, ...groupedSuggestions.staticImages, ...groupedSuggestions.vendorImages].map(
+                  (item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onMouseDown={() => handleSuggestionClick(item.name)}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[#201710] transition hover:bg-[#f7f2ec]"
+                    >
+                      {item.type === "image" ? (
+                        <span className="relative h-8 w-8 overflow-hidden rounded-xl border border-[#f0e6da] bg-[#f7f2ec]">
+                          <Image
+                            src={item.url}
+                            alt={item.name}
+                            fill
+                            className="object-cover"
+                          />
+                        </span>
+                      ) : (
+                        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#f3e8da] text-[#8b3e12]">
+                          <Search size={14} />
+                        </span>
+                      )}
+                      <span className="font-medium">{item.name}</span>
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          ) : null}
+        </form>
 
         {/* Logo */}
         <div className="flex items-center gap-2 md:gap-3 justify-center flex-1 md:flex-none">
@@ -134,7 +298,7 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
 
 
 
-          <Link
+          {/* <Link
             href="/about"
             className={
               isAboutActive
@@ -143,7 +307,7 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
             }
           >
             About
-          </Link>
+          </Link> */}
 
           <Link
             href="/contact"
@@ -180,17 +344,73 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
           }`}
       >
         {/* Mobile Search */}
-        <div className="relative mb-4">
+        <form onSubmit={handleSearchSubmit} className="relative mb-4">
           <input
             type="text"
-            placeholder="Search..."
-            className="w-full border border-gray-400 rounded-full py-2 px-10 bg-transparent focus:outline-none"
+            placeholder="Search"
+            value={searchQuery}
+            onChange={(event) => {
+              setSuppressSuggestions(false);
+              setSearchQuery(event.target.value);
+            }}
+            className="w-full rounded-full border border-[#dbcbb8] bg-white/80 py-2.5 pl-11 pr-12 text-sm text-black shadow-[0_10px_40px_-32px_rgba(68,40,6,0.45)] backdrop-blur focus:border-[#b58a61] focus:outline-none"
+            aria-label="Search products and catalogues"
           />
           <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8b3e12]"
             size={18}
           />
-        </div>
+          <button
+            type="submit"
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8b3e12]"
+            aria-label="Search"
+          >
+            <Search size={16} />
+          </button>
+          {searchMessage ? (
+            <p className="mt-2 text-xs font-medium text-red-600">{searchMessage}</p>
+          ) : null}
+          {shouldShowSuggestions ? (
+            <div className="absolute left-0 right-0 top-full z-[300] mt-3 overflow-hidden rounded-[22px] border border-[#e7dccf] bg-white shadow-[0_28px_70px_-40px_rgba(67,38,6,0.45)]">
+              {searchMessage ? (
+                <div className="px-4 py-5 text-sm text-red-600">{searchMessage}</div>
+              ) : null}
+
+              {!isSearching && totalResults === 0 && !searchMessage ? (
+                <div className="px-4 py-5 text-sm text-[#6b5f52]">No results yet. Try a different keyword.</div>
+              ) : null}
+
+              <div className="max-h-72 overflow-y-auto py-3">
+                {[...groupedSuggestions.pdfs, ...groupedSuggestions.staticImages, ...groupedSuggestions.vendorImages].map(
+                  (item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onMouseDown={() => handleSuggestionClick(item.name)}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[#201710] transition hover:bg-[#f7f2ec]"
+                    >
+                      {item.type === "image" ? (
+                        <span className="relative h-8 w-8 overflow-hidden rounded-xl border border-[#f0e6da] bg-[#f7f2ec]">
+                          <Image
+                            src={item.url}
+                            alt={item.name}
+                            fill
+                            className="object-cover"
+                          />
+                        </span>
+                      ) : (
+                        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#f3e8da] text-[#8b3e12]">
+                          <Search size={14} />
+                        </span>
+                      )}
+                      <span className="font-medium">{item.name}</span>
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          ) : null}
+        </form>
 
         <div className="flex flex-col space-y-3 text-amber-800 font-medium">
 
@@ -202,9 +422,9 @@ const Header = ({ isVendorLoggedIn }: HeaderProps) => {
             Vendors
           </Link>
 
-          <Link href="/about" onClick={() => setIsOpen(false)}>
+          {/* <Link href="/about" onClick={() => setIsOpen(false)}>
             About
-          </Link>
+          </Link> */}
 
           <Link href="/contact" onClick={() => setIsOpen(false)}>
             Contact

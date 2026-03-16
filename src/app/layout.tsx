@@ -13,6 +13,9 @@ import { isVendorRenewalExpired } from "@/lib/vendor-renewal";
 export const metadata: Metadata = {
   title: "Ratlami Interio",
   description: "Interior & Vendors Platform",
+  icons: {
+    icon: "/image/logo.png",
+  },
 };
 
 export default async function RootLayout({

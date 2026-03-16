@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   LogOut,
   Mail,
+  Menu,
   Package,
   Share2,
   Search,
@@ -206,6 +207,7 @@ export default function AdminDashboardClient({
   const [isPending, startTransition] = useTransition();
   const [selectedTab, setSelectedTab] = useState<TabId>(normalizeTab(activeTab));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [vendorSearch, setVendorSearch] = useState("");
   const [vendorFilter, setVendorFilter] = useState<"All" | "Active" | "Inactive" | "Locked" | "Pending">("All");
   const [productSearch, setProductSearch] = useState("");
@@ -706,8 +708,68 @@ export default function AdminDashboardClient({
           sidebarCollapsed ? "lg:grid-cols-[96px_minmax(0,1fr)]" : "lg:grid-cols-[280px_minmax(0,1fr)]"
         }`}
       >
+        {isMobileSidebarOpen ? (
+          <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm lg:hidden">
+            <aside className="absolute left-4 right-4 top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[28px] border border-white/80 bg-[linear-gradient(180deg,#2e2a26_0%,#1f1c19_100%)] p-4 text-white shadow-2xl">
+              <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.28em] text-white/60">Ratlami Interio</p>
+                  <h1 className="mt-3 text-2xl font-semibold">Admin Dashboard</h1>
+                  <p className="mt-2 text-sm text-white/70">
+                    Vendors, products, and leads in one workspace.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileSidebarOpen(false)}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/10 transition hover:bg-white/15"
+                  aria-label="Close sidebar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <nav className="mt-6 space-y-2">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const active = selectedTab === tab.id;
+
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTab(tab.id);
+                        setIsMobileSidebarOpen(false);
+                      }}
+                      className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium transition ${
+                        active
+                          ? "bg-white text-[var(--black)] shadow-sm"
+                          : "text-white/70 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      <Icon size={18} />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+
+              <form action={onLogoutAction} className="mt-8">
+                <button
+                  type="submit"
+                  className="flex w-full items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/15"
+                >
+                  <LogOut size={18} />
+                  Logout
+                </button>
+              </form>
+            </aside>
+          </div>
+        ) : null}
+
         <aside
-          className={`rounded-[28px] border border-white/80 bg-[linear-gradient(180deg,#2e2a26_0%,#1f1c19_100%)] p-4 text-white shadow-2xl lg:h-[calc(100vh-3rem)] ${
+          className={`hidden rounded-[28px] border border-white/80 bg-[linear-gradient(180deg,#2e2a26_0%,#1f1c19_100%)] p-4 text-white shadow-2xl lg:block lg:h-[calc(100vh-3rem)] ${
             sidebarCollapsed ? "lg:w-[96px]" : "lg:w-[280px]"
           }`}
         >
@@ -772,6 +834,21 @@ export default function AdminDashboardClient({
               {actionError}
             </div>
           ) : null}
+
+          <div className="flex items-center justify-between rounded-[22px] border border-white/70 bg-white/88 px-4 py-3 shadow-xl backdrop-blur lg:hidden">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-[var(--darkgray)]">Admin Menu</p>
+              <p className="text-base font-semibold text-[var(--black)]">Dashboard</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--black)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white"
+            >
+              <Menu size={16} />
+              Menu
+            </button>
+          </div>
 
           <header className="rounded-[28px] border border-white/70 bg-white/88 p-6 shadow-xl backdrop-blur">
             <div className="flex flex-wrap items-start justify-between gap-4">

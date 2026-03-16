@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       await setVendorStatus(vendor._id.toString(), "locked");
       return NextResponse.json({ ok: false, error: "Vendor not available." }, { status: 404 });
     }
-
+    
     const cookieStore = await cookies();
     let visitorId = cookieStore.get(VENDOR_CATALOGUE_VISITOR_COOKIE)?.value ?? "";
     const shouldSetCookie = !visitorId;
