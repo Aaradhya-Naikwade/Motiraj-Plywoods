@@ -89,7 +89,16 @@ const getStaticCatalogAssets = cache(async (): Promise<CatalogAsset[]> => {
   const publicDir = path.join(process.cwd(), "public");
   const assets: CatalogAsset[] = [];
 
-  const staticImageRoots = ["products", "decorative", "hardware", "laminates"];
+  const staticImageRoots = [
+    "products",
+    "Products",
+    "decorative",
+    "Decorative",
+    "hardware",
+    "Hardware",
+    "laminates",
+    "Laminates",
+  ];
   for (const root of staticImageRoots) {
     const rootDir = path.join(publicDir, root);
     if (!(await directoryExists(rootDir))) {
