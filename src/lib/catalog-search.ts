@@ -75,6 +75,17 @@ async function walkFiles(dirPath: string): Promise<string[]> {
 }
 
 const getStaticCatalogAssets = cache(async (): Promise<CatalogAsset[]> => {
+  if (process.env.NODE_ENV === "production") {
+    try {
+      const { default: assets } = await import("@/data/catalog-index.json");
+      if (Array.isArray(assets)) {
+        return assets as CatalogAsset[];
+      }
+    } catch {
+      // Fallback to filesystem scan if the index is missing.
+    }
+  }
+
   const publicDir = path.join(process.cwd(), "public");
   const assets: CatalogAsset[] = [];
 

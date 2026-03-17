@@ -36,6 +36,9 @@ yarn-error.log*
 # local uploaded media
 public/uploads/vendor-products/*
 
+# generated catalog index
+src/data/catalog-index.json
+
 # vercel
 .vercel
 
