@@ -90,6 +90,7 @@ const Hero = () => {
     };
   }, [activeTab]);
 
+  
   const handleRedirect = (item: string) => {
     const slug = item.toLowerCase().replace(/\s+/g, "-");
     setActiveTab(null);
