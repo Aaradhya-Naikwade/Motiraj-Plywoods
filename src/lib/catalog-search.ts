@@ -148,26 +148,27 @@ async function getVendorCatalogAssets(): Promise<CatalogAsset[]> {
   const vendors = await findVendorsByIds(vendorIds);
   const vendorMap = new Map(vendors.map((vendor) => [vendor._id.toString(), vendor]));
 
-  return products
-    .map((product) => {
-      const vendor = vendorMap.get(product.vendor_id.toString());
-      if (!vendor || vendor.status !== "active") {
-        return null;
-      }
-      return {
-        id: `vendor-image:${product._id.toString()}`,
-        type: "image" as const,
-        source: "vendor" as const,
-        name: product.image_name || vendor.company_name || "Vendor image",
-        category: vendorCategoryLabelByKey.get(product.category_key) ?? product.category_key,
-        url: product.image_url,
-        vendorName: vendor.company_name,
-        vendorMobile: vendor.mobile,
-        vendorWhatsapp: vendor.whatsapp_number,
-        catalogueSlug: vendor.catalogue_slug,
-      };
-    })
-    .filter((item): item is CatalogAsset => item !== null);
+  return products.flatMap((product) => {
+    const vendor = vendorMap.get(product.vendor_id.toString());
+    if (!vendor || vendor.status !== "active") {
+      return [];
+    }
+
+    const asset: CatalogAsset = {
+      id: `vendor-image:${product._id.toString()}`,
+      type: "image",
+      source: "vendor",
+      name: product.image_name || vendor.company_name || "Vendor image",
+      category: vendorCategoryLabelByKey.get(product.category_key) ?? product.category_key,
+      url: product.image_url,
+      vendorName: vendor.company_name,
+      vendorMobile: vendor.mobile,
+      vendorWhatsapp: vendor.whatsapp_number,
+      catalogueSlug: vendor.catalogue_slug,
+    };
+
+    return [asset];
+  });
 }
 
 function matchesQuery(asset: CatalogAsset, query: string): boolean {
