@@ -35,20 +35,19 @@ function toPublicUrl(relativePath) {
   return encodeURI(`/${normalized}`);
 }
 
+async function resolveStaticImageRoots(publicDir) {
+  const desired = new Set(["products", "decorative", "hardware", "laminates"]);
+  const entries = await fs.readdir(publicDir, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isDirectory() && desired.has(entry.name.toLowerCase()))
+    .map((entry) => entry.name);
+}
+
 async function buildStaticCatalogAssets() {
   const publicDir = path.join(process.cwd(), "public");
   const assets = [];
 
-  const staticImageRoots = [
-    "products",
-    "Products",
-    "decorative",
-    "Decorative",
-    "hardware",
-    "Hardware",
-    "laminates",
-    "Laminates",
-  ];
+  const staticImageRoots = await resolveStaticImageRoots(publicDir);
   for (const root of staticImageRoots) {
     const rootDir = path.join(publicDir, root);
     if (!(await directoryExists(rootDir))) {
