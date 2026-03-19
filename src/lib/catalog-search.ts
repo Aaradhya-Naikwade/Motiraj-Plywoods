@@ -169,12 +169,14 @@ async function getVendorCatalogAssets(): Promise<CatalogAsset[]> {
       return [];
     }
 
+    const categoryLabel = vendorCategoryLabelByKey.get(product.category_key) ?? product.category_key;
     const asset: CatalogAsset = {
       id: `vendor-image:${product._id.toString()}`,
       type: "image",
       source: "vendor",
-      name: product.image_name || vendor.company_name || "Vendor image",
-      category: vendorCategoryLabelByKey.get(product.category_key) ?? product.category_key,
+      // For vendor assets, keep the "name" aligned to category to avoid showing vendor-uploaded file names in search.
+      name: categoryLabel,
+      category: categoryLabel,
       url: product.image_url,
       vendorName: vendor.company_name,
       vendorMobile: vendor.mobile,
@@ -192,12 +194,11 @@ function matchesQuery(asset: CatalogAsset, query: string): boolean {
     return false;
   }
 
-  const searchable = [
-    asset.name,
-    asset.category,
-    asset.type,
-    asset.source,
-  ]
+  if (asset.source === "vendor") {
+    return normalizeText(asset.category).includes(normalizedQuery);
+  }
+
+  const searchable = [asset.name, asset.category, asset.type, asset.source]
     .map(normalizeText)
     .filter(Boolean);
 

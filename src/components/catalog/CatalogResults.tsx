@@ -32,7 +32,7 @@ export default async function CatalogResults({ query, heading }: CatalogResultsP
               Start typing to search products
             </h1>
             <p className="mt-2 text-sm text-[#64584c]">
-              Search by category name, PDF name, or image name to see matching results.
+              Search by category name or PDF name. Vendor images match by category.
             </p>
           </div>
         </div>

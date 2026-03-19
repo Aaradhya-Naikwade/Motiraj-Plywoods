@@ -132,15 +132,6 @@ export default async function VendorAuthPage({ searchParams }: VendorAuthPagePro
               />
             </label>
 
-            <div className="flex justify-end">
-              <a
-                href="/vendor/forgot-password"
-                className="text-xs font-medium text-[var(--primary)]"
-              >
-                Forgot Password?
-              </a>
-            </div>
-
             <button
               type="submit"
               className="inline-flex w-full items-center justify-center rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"

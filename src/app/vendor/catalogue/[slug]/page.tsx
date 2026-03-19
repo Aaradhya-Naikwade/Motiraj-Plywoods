@@ -57,6 +57,7 @@ export default async function VendorCataloguePage({ params }: VendorCataloguePag
       })),
   })).filter((group) => group.items.length > 0);
 
+
   return (
     <section className="min-h-screen bg-[#f6f3ef] px-4 py-8 md:px-6 md:py-10">
       <div className="mx-auto max-w-7xl space-y-8">
